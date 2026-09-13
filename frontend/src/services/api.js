@@ -1,0 +1,60 @@
+// src/services/api.js
+// Servicio de API: configura la instancia de Axios con la URL base del backend y los interceptores de token y errores.
+import axios from 'axios';
+
+// Instancia Axios con la URL base del backend.
+// No forzamos Content-Type globalmente para permitir que Axios
+// determine correctamente el encabezado (p.ej. multipart/form-data con boundary).
+const API = axios.create({
+    baseURL: 'http://localhost:5228/api'
+});
+
+// Interceptor para agregar el token
+API.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem('token');
+
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+        return config;
+    },
+    (error) => {
+        return Promise.reject(error);
+    }
+);
+
+// Interceptor para manejar errores
+API.interceptors.response.use(
+    (response) => {
+        return response;
+    },
+    (error) => {
+        // Solo redirigir si es 401 y NO es una petición que debe manejar el error
+        if (error.response?.status === 401) {
+            const url = error.config?.url || '';
+
+            // ✅ EXCLUIR estas URLs del cierre de sesión
+            const urlsExcluidas = [
+                '/boleta/',
+                '/notasdocente/mis-materias',
+                '/resultados-periodos/',
+                '/notas/'
+            ];
+
+            const debeExcluir = urlsExcluidas.some(u => url.includes(u));
+
+            if (debeExcluir) {
+                return Promise.reject(error);
+            }
+
+            // Si no está en la lista de excluidas, cerrar sesión
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        }
+        return Promise.reject(error);
+    }
+);
+
+export default API;

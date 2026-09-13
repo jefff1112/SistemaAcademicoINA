@@ -1,0 +1,133 @@
+namespace SistemaAcademicoINA.Models.DTOs;
+
+// ============================================================
+// DTOs para el módulo de Actividades y Sub-Actividades
+// ============================================================
+
+/// <summary>
+/// Respuesta completa de la estructura de actividades + sub-actividades
+/// </summary>
+public class EstructuraCompletaResponse
+{
+    public List<ActividadEstructuraDTO> Actividades { get; set; } = new();
+    public decimal TotalPonderacionActividades { get; set; }
+    public decimal PonderacionRestante { get; set; }
+    public bool EsValidaTotal { get; set; }
+    public bool EsModulo { get; set; }
+    public string? NombreMateria { get; set; }
+    public string? NombreEspecialidad { get; set; }
+    public string NombreClase { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// DTO de actividad con sus sub-actividades
+/// </summary>
+public class ActividadEstructuraDTO
+{
+    public int IdActividad { get; set; }
+    public int? IdMateria { get; set; }
+    public int? IdEspecialidad { get; set; }
+    public int IdClase { get; set; }
+    public int IdDocente { get; set; }
+    public string NombreActividad { get; set; } = string.Empty;
+    public string TipoActividad { get; set; } = "Actividad";
+    public decimal Ponderacion { get; set; }
+    public DateTime? FechaPublicacion { get; set; }
+    public DateTime? FechaLimite { get; set; }
+    public string? Descripcion { get; set; }
+    public string? Especificacion { get; set; }
+    public string Estado { get; set; } = "Activo";
+    public bool IncluirAutoevaluacion { get; set; }
+    public bool IncluirCoevaluacion { get; set; }
+    public decimal PonderacionAutoevaluacion { get; set; }
+    public decimal PonderacionCoevaluacion { get; set; }
+    public bool EsModulo { get; set; }
+    public int NumeroOrden { get; set; }
+    public bool PonderacionValida { get; set; }
+    public List<SubActividadEstructuraDTO> SubActividades { get; set; } = new();
+    public decimal TotalPonderacionSub { get; set; }
+    public bool SubPonderacionesValidas { get; set; }
+}
+
+/// <summary>
+/// DTO de sub-actividad
+/// </summary>
+public class SubActividadEstructuraDTO
+{
+    public int IdSubActividad { get; set; }
+    public int IdActividad { get; set; }
+    public string NombreSubActividad { get; set; } = string.Empty;
+    public string TipoSubActividad { get; set; } = "Subactividad";
+    public decimal Ponderacion { get; set; }
+    public int Orden { get; set; }
+    public int NumeroOrden { get; set; }
+    public bool EsVertical { get; set; }
+    public string NombreDisplay { get; set; } = string.Empty;
+    public string CssClass { get; set; } = string.Empty;
+    public bool LlevaNota { get; set; }
+    public bool EsAutoevaluacion { get; set; }
+    public bool EsCoevaluacion { get; set; }
+    public bool EsPruebaObjetiva { get; set; }
+    public bool EsActividadModulo { get; set; }
+    public bool EsRecuperacionModulo { get; set; }
+    public string Icono { get; set; } = "📋";
+}
+
+/// <summary>
+/// Request para crear/actualizar actividad
+/// </summary>
+public class CrearActividadRequest
+{
+    public int IdClase { get; set; }
+    public int? IdMateria { get; set; }
+    public int? IdEspecialidad { get; set; }
+    public int? IdDocente { get; set; }
+    public string NombreActividad { get; set; } = string.Empty;
+    public string TipoActividad { get; set; } = "Actividad";
+    public decimal Ponderacion { get; set; }
+    public DateTime? FechaPublicacion { get; set; }
+    public DateTime? FechaLimite { get; set; }
+    public string? Descripcion { get; set; }
+    public string? Especificacion { get; set; }
+    public bool IncluirAutoevaluacion { get; set; }
+    public bool IncluirCoevaluacion { get; set; }
+    public decimal PonderacionAutoevaluacion { get; set; }
+    public decimal PonderacionCoevaluacion { get; set; }
+    public bool EsModulo { get; set; }
+}
+
+/// <summary>
+/// Request para crear/actualizar sub-actividad
+/// </summary>
+public class CrearSubActividadRequest
+{
+    public int IdActividad { get; set; }
+    public string NombreSubActividad { get; set; } = string.Empty;
+    public string TipoSubActividad { get; set; } = "Subactividad";
+    public decimal Ponderacion { get; set; }
+    public int Orden { get; set; }
+    public int NumeroOrden { get; set; }
+    public bool EsVertical { get; set; }
+}
+
+/// <summary>
+/// Request para crear estructura predeterminada INA
+/// </summary>
+public class CrearEstructuraPredeterminadaRequest
+{
+    public int IdClase { get; set; }
+    public int? IdMateria { get; set; }
+    public int? IdEspecialidad { get; set; }
+    public int? IdDocente { get; set; }
+}
+
+/// <summary>
+/// Request para redistribuir ponderaciones
+/// </summary>
+public class RedistribuirPonderacionesRequest
+{
+    public int IdClase { get; set; }
+    public int? IdMateria { get; set; }
+    public int? IdEspecialidad { get; set; }
+    public int IdDocente { get; set; }
+}

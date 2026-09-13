@@ -1,0 +1,143 @@
+﻿/* ==========================================================================
+   PALETA INSTITUCIONAL INA - Overrides visuales (solo estilos, cero logica)
+   Azul INA Profundo  #1A2E6B  |  Azul Real INA    #2B47B8
+   Dorado INA         #C8A832  |  Blanco Institucional #EEF1F9
+   ========================================================================== */
+/* Variables de color y estilos globales con la paleta institucional del INA. */
+
+:root {
+    --ina-deep:  #1A2E6B;
+    --ina-blue:  #2B47B8;
+    --ina-gold:  #C8A832;
+    --ina-bg:    #EEF1F9;
+}
+
+/* 1) Fondo general institucional */
+body {
+    background-color: #EEF1F9 !important;
+}
+
+/* 2) Barra lateral (Sidebar) y Navbar publico */
+.sidebar {
+    background: #1A2E6B !important;
+    background-image: none !important;
+}
+
+.navbar {
+    background: linear-gradient(135deg, #1A2E6B 0%, #2B47B8 100%) !important;
+}
+
+/* 3) Topbar del dashboard */
+.dashboard-topbar {
+    background: #EEF1F9 !important;
+}
+
+.page-title h1 { color: #1A2E6B !important; }
+.user-name     { color: #1A2E6B !important; }
+
+/* 4) Botones principales (vence estilos inline) */
+.btn-primary {
+    background: #2B47B8 !important;
+    border-color: #2B47B8 !important;
+    color: #FFFFFF !important;
+}
+.btn-primary:hover {
+    background: #1A2E6B !important;
+    border-color: #1A2E6B !important;
+}
+
+/* 5) Botones de edicion: naranja y azules -> Dorado INA */
+.btn-edit {
+    background: #C8A832 !important;
+    color: #1A2E6B !important;
+}
+.btn-edit:hover { background: #B8912A !important; color: #1A2E6B !important; }
+
+.action-btn {
+    background: #2B47B8 !important;
+    color: #FFFFFF !important;
+}
+.action-btn:hover { background: #1A2E6B !important; }
+
+/* 6) ENLACES */
+a { color: #2B47B8 !important; }
+.sidebar a, .navbar a, .nav-item, .footer a, .nav-logo {
+    color: #FFFFFF !important;
+}
+
+/* 7) Titulos y encabezados institucionales */
+.welcome-card h2 { color: #1A2E6B !important; }
+.card-section h2  { color: #1A2E6B !important; }
+.quick-action-card .action-info h3 { color: #1A2E6B !important; }
+.clase-info h4    { color: #1A2E6B !important; }
+.actividad-info h4{ color: #1A2E6B !important; }
+.aviso-header h4  { color: #1A2E6B !important; }
+.resumen-valor    { color: #1A2E6B !important; }
+.clase-hora .hora { color: #1A2E6B !important; }
+.stat-info h3     { color: #1A2E6B !important; }
+.info-label       { color: #1A2E6B !important; }
+.nav-logo         { font-weight: bold; }
+
+/* 8) SUPERFICIES: blanco puro -> Blanco Institucional #EEF1F9 */
+.card              { background: #EEF1F9 !important; }
+.card h3           { color: #1A2E6B !important; }
+.card-section      { background: #EEF1F9 !important; }
+.quick-action-card { background: #EEF1F9 !important; }
+.welcome-card      { background: #EEF1F9 !important; }
+.modal-container, .modal-content { background: #EEF1F9 !important; }
+
+/* Items internos (sobre tarjetas azuladas) */
+.clase-item    { background: #EEF1F9 !important; }
+.actividad-item{ background: #EEF1F9 !important; }
+.resumen-item  { background: #EEF1F9 !important; }
+.aviso-item    { background: #EEF1F9 !important; border-left-color: #C8A832 !important; }
+.clase-item:hover, .actividad-item:hover { background: #E3E8F7 !important; }
+
+/* 9) FIX BLANCO SOBRE BLANCO: tarjetas de estadisticas (3 defs en conflicto en index.css) */
+/* Tarjeta sobre Blanco Institucional con texto oscuro SIEMPRE legible */
+.stat-card {
+    background: #EEF1F9 !important;
+    background-image: none !important;
+    color: #1A2E6B !important;
+    box-shadow: 0 2px 10px rgba(17, 34, 94, 0.12) !important;
+    border: 1px solid #D5DBEF !important;
+}
+.stat-card h3, .stat-label { color: #4A5568 !important; }
+.stat-card .stat-value, .stat-number { color: #1A2E6B !important; }
+.stat-card:hover { transform: translateY(-2px); }
+
+/* 10) FIX MODAL: boton de cierre (X) SIEMPRE visible */
+.modal-close {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 34px !important;
+    height: 34px !important;
+    border-radius: 50% !important;
+    background: #EEF1F9 !important;
+    color: #1A2E6B !important;
+    border: 2px solid #2B47B8 !important;
+    font-size: 1.15rem !important;
+    font-weight: 700 !important;
+    line-height: 1 !important;
+    cursor: pointer !important;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.15s ease !important;
+}
+.modal-close:hover {
+    background: #C8A832 !important;
+    color: #1A2E6B !important;
+    border-color: #C8A832 !important;
+    transform: scale(1.1) !important;
+}
+
+/* 11) Headers de modal / secciones sobre azul */
+.modal-header { background: #1A2E6B !important; }
+.modal-header h3 { color: #FFFFFF !important; }
+.data-table th { background: #1A2E6B !important; color: #FFFFFF !important; }
+
+/* 12) Detalles y acentos */
+.badge-hoy  { background: #2B47B8 !important; color: #FFFFFF !important; }
+.card-section.destacado { background: linear-gradient(135deg, #1A2E6B 0%, #2B47B8 100%) !important; color: #FFFFFF !important; }
+.card-section.destacado h2 { color: #FFFFFF !important; }
+.spinner { border-top-color: #2B47B8 !important; }
+.stat-icon { background: #E3E8F7 !important; color: #1A2E6B !important; }

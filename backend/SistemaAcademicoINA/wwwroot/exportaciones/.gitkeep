@@ -1,0 +1,3 @@
+# Este directorio almacena las exportaciones Excel generadas por los usuarios autorizados.
+# Los archivos se crean dinámicamente cuando se genera una exportación.
+# No eliminar manualmente - el sistema gestiona su limpieza.

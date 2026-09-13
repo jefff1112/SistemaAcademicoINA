@@ -1,0 +1,227 @@
+# Tests de Integración: Cuadro Auxiliar + Gestión Actividades
+# Uso: VS Code REST Client extension o Postman
+# Requiere: Backend corriendo en https://localhost:7xxx (puerto del launchSettings)
+# Credenciales seed: DOC001 / 123456 (docente), 2026-00001-INA / 123456 (estudiante)
+
+@baseUrl = https://localhost:7045
+@docenteUser = DOC001
+@docentePass = 123456
+@estudianteUser = 2026-00001-INA
+@estudiantePass = 123456
+@registroUser = REG001
+@registroPass = 123456
+
+### ============================================================================
+### 1. LOGIN Y OBTENER TOKENS
+### ============================================================================
+
+### Login Docente
+# @name loginDocente
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "usuario": "{{docenteUser}}",
+  "password": "{{docentePass}}"
+}
+
+### Login Estudiante
+# @name loginEstudiante
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "usuario": "{{estudianteUser}}",
+  "password": "{{estudiantePass}}"
+}
+
+### Login Registro Académico
+# @name loginRegistro
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "usuario": "{{registroUser}}",
+  "password": "{{registroPass}}"
+}
+
+### ============================================================================
+### 2. VARIABLES AUTOMÁTICAS (se llenan tras login)
+### ============================================================================
+
+@docenteToken = {{loginDocente.response.body.token}}
+@estudianteToken = {{loginEstudiante.response.body.token}}
+@registroToken = {{loginRegistro.response.body.token}}
+
+### ============================================================================
+### 3. FLUJO DOCENTE: CREAR ESTRUCTURA PREDETERMINADA
+### ============================================================================
+
+### Obtener clases del docente
+GET {{baseUrl}}/api/clases
+Authorization: Bearer {{docenteToken}}
+
+### Obtener materias para una clase (reemplazar ID)
+# @name materiasClase
+GET {{baseUrl}}/api/materias/clase/1
+Authorization: Bearer {{docenteToken}}
+
+### Crear estructura predeterminada INA (3 act: 35/35/30% con 5/5/3 subs)
+# Reemplazar idMateria e idClase según respuesta anterior
+POST {{baseUrl}}/api/actividades/crear-estructura-predeterminada
+Authorization: Bearer {{docenteToken}}
+Content-Type: application/json
+
+{
+  "idMateria": 1,
+  "idClase": 1,
+  "idDocente": 0
+}
+
+### ============================================================================
+### 4. FLUJO DOCENTE: OBTENER ESTRUCTURA COMPLETA
+### ============================================================================
+
+### Estructura completa con validación 100%
+GET {{baseUrl}}/api/actividades/estructura-completa?idMateria=1&idClase=1
+Authorization: Bearer {{docenteToken}}
+
+### ============================================================================
+### 5. FLUJO DOCENTE: CUADRO AUXILIAR - CARGAR MATRIZ
+### ============================================================================
+
+### Obtener cuadro auxiliar (estudiantes × sub-actividades)
+# Requiere: idClase, idMateria, idPeriodo válidos
+GET {{baseUrl}}/api/CalificacionesSubActividades/cuadro-auxiliar?idClase=1&idMateria=1&idPeriodo=1
+Authorization: Bearer {{docenteToken}}
+
+### ============================================================================
+### 6. FLUJO DOCENTE: GUARDAR NOTAS
+### ============================================================================
+
+### Guardar nota individual
+POST {{baseUrl}}/api/CalificacionesSubActividades/guardar
+Authorization: Bearer {{docenteToken}}
+Content-Type: application/json
+
+{
+  "idSubActividad": 1,
+  "idEstudiante": 1,
+  "nota": 8.5,
+  "observaciones": "Buen desempeño"
+}
+
+### Guardar múltiples notas (batch optimizado)
+POST {{baseUrl}}/api/CalificacionesSubActividades/guardar-multiple
+Authorization: Bearer {{docenteToken}}
+Content-Type: application/json
+
+[
+  { "idSubActividad": 1, "idEstudiante": 1, "nota": 8.5 },
+  { "idSubActividad": 2, "idEstudiante": 1, "nota": 9.0 },
+  { "idSubActividad": 3, "idEstudiante": 2, "nota": 7.0 },
+  { "idSubActividad": 4, "idEstudiante": 2, "nota": 6.5 }
+]
+
+### Guardar nota de recuperación
+POST {{baseUrl}}/api/CalificacionesSubActividades/guardar-recuperacion
+Authorization: Bearer {{docenteToken}}
+Content-Type: application/json
+
+{
+  "idEstudiante": 1,
+  "idMateria": 1,
+  "idClase": 1,
+  "idPeriodo": 1,
+  "notaRecuperacion": 7.5,
+  "observacionRecuperacion": "Recuperación aprobada"
+}
+
+### ============================================================================
+### 7. FLUJO ESTUDIANTE: VER ACTIVIDADES Y NOTAS POR SUB-ACTIVIDAD
+### ============================================================================
+
+### Período activo
+GET {{baseUrl}}/api/periodosacademicos/activo
+Authorization: Bearer {{estudianteToken}}
+
+### Mis actividades (con notas por sub-actividad)
+GET {{baseUrl}}/api/actividades/estructura-completa?idMateria=1&idClase=1
+Authorization: Bearer {{estudianteToken}}
+
+### Notas por sub-actividad para una actividad específica
+GET {{baseUrl}}/api/CalificacionesSubActividades/estudiante/1/actividad/1
+Authorization: Bearer {{estudianteToken}}
+
+### ============================================================================
+### 8. FLUJO REGISTRO ACADÉMICO: EXPORTACIONES EXCEL (6 combinaciones)
+### ============================================================================
+
+### 1. Clase + Materia + 1 Periodo
+GET {{baseUrl}}/api/CalificacionesSubActividades/exportar?idClase=1&idMateria=1&idPeriodo=1
+Authorization: Bearer {{registroToken}}
+
+### 2. Clase + Materia + Todos los Periodos
+GET {{baseUrl}}/api/CalificacionesSubActividades/exportar?idClase=1&idMateria=1&todasPeriodos=true&anioLectivo=2026
+Authorization: Bearer {{registroToken}}
+
+### 3. Clase + Todas las Materias + 1 Periodo
+GET {{baseUrl}}/api/CalificacionesSubActividades/exportar?idClase=1&idPeriodo=1&todasMaterias=true&anioLectivo=2026
+Authorization: Bearer {{registroToken}}
+
+### 4. Clase + Todas las Materias + Todos los Periodos
+GET {{baseUrl}}/api/CalificacionesSubActividades/exportar?idClase=1&todasMaterias=true&todasPeriodos=true&anioLectivo=2026
+Authorization: Bearer {{registroToken}}
+
+### 5. Consolidado Anual (hojas por nivel)
+GET {{baseUrl}}/api/CalificacionesSubActividades/exportar?esConsolidadoAnual=true&anioLectivo=2026
+Authorization: Bearer {{registroToken}}
+
+### 6. Por Clase + Materia + Periodo (ya existe - endpoint legacy)
+GET {{baseUrl}}/api/cuadro-auxiliar/exportar?idClase=1&idMateria=1&idPeriodo=1
+Authorization: Bearer {{registroToken}}
+
+### ============================================================================
+### 9. IMPORTACIÓN Y PLANTILLA
+### ============================================================================
+
+### Descargar plantilla Excel
+GET {{baseUrl}}/api/cuadro-auxiliar/plantilla?idClase=1&idMateria=1&idPeriodo=1
+Authorization: Bearer {{docenteToken}}
+
+### Importar desde Excel (multipart/form-data)
+# Nota: requiere archivo real; usar Postman o curl con -F
+# POST {{baseUrl}}/api/cuadro-auxiliar/importar?idClase=1&idMateria=1&idPeriodo=1
+# Authorization: Bearer {{docenteToken}}
+# Content-Type: multipart/form-data
+
+### ============================================================================
+### 10. PRUEBAS DE VALIDACIONES (deberían fallar con 400)
+### ============================================================================
+
+### Sub-actividad > 100% (trigger BD)
+POST {{baseUrl}}/api/subactividades
+Authorization: Bearer {{docenteToken}}
+Content-Type: application/json
+
+{
+  "idActividad": 1,
+  "nombreSubActividad": "SubActividad Test",
+  "ponderacion": 150,
+  "orden": 1
+}
+
+### Redistribuir ponderaciones al borrar actividad
+DELETE {{baseUrl}}/api/actividades/1
+Authorization: Bearer {{docenteToken}}
+
+### ============================================================================
+### VARIABLES DE APOYO (copiar IDs de respuestas anteriores)
+### ============================================================================
+
+# @idClase = 1
+# @idMateria = 1
+# @idPeriodo = 1
+# @idActividad = 1
+# @idSubActividad = 1
+# @idEstudiante = 1

@@ -1,0 +1,19 @@
+/* Estilos del módulo de Actividades (formulario, progreso y tablas). */
+.actividades-module { background: #fff; padding: 16px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+.module-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; }
+.act-form { display:grid; gap:10px; padding:10px 0; }
+.act-row { display:flex; flex-direction:column; }
+.act-row label { font-weight:600; margin-bottom:6px; }
+.act-row input, .act-row textarea, .act-row select { padding:8px; border:1px solid #ddd; border-radius:4px; }
+.act-progress { position:relative; height:22px; background:#f0f2f5; border-radius:4px; overflow:hidden; margin-top:6px; }
+.act-progress-bar { height:100%; transition:width .25s ease; }
+.act-progress-label { position:absolute; right:8px; top:0; bottom:0; display:flex; align-items:center; font-size:12px; color:#fff; padding-right:6px; }
+.act-error { color:#b00020; background:#fdecea; padding:8px; border-radius:4px; }
+.act-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
+.btn { padding:8px 12px; border-radius:4px; border:none; cursor:pointer; background:#214a6b; color:white; }
+.btn.secondary { background:#e0e6eb; color:#214a6b; }
+.btn.small { padding:6px 8px; font-size:13px; }
+.btn.danger { background:#c0392b; }
+.activities-table table { width:100%; border-collapse:collapse; }
+.activities-table th, .activities-table td { text-align:left; padding:8px 10px; border-bottom:1px solid #eee; }
+.activities-table .empty { text-align:center; color:#666; padding:16px; }

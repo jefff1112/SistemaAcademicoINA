@@ -1,0 +1,134 @@
+/* Estilos del componente ResultadosPeriodos del Docente (tabla de resultados y estadísticas). */
+.resultados-periodos-container .card {
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    padding: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.resultados-periodos-container .card-header h4 {
+    margin: 0;
+    color: #1e3a5f;
+}
+
+.resultados-periodos-container .filtros-row {
+    margin-bottom: 1rem;
+}
+
+.resultados-periodos-container .filtros-row label {
+    display: block;
+    margin-bottom: 4px;
+    font-weight: 500;
+    color: #334155;
+}
+
+.resultados-periodos-container .filtros-row select {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    background: #f8fafc;
+    color: #1e293b;
+}
+
+.resultados-periodos-container .filtros-row button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 500;
+    margin-right: 6px;
+}
+
+.resultados-periodos-container .btn-primary {
+    background: #1e3a5f;
+    color: #fff;
+}
+
+.resultados-periodos-container .btn-secondary {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+
+.resultados-periodos-container .alert {
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-top: 12px;
+    font-size: 14px;
+}
+
+.resultados-periodos-container .alert-info { background: #e0f2fe; color: #075985; }
+.resultados-periodos-container .alert-danger { background: #fee2e2; color: #991b1b; }
+.resultados-periodos-container .alert-warning { background: #fef3c7; color: #92400e; }
+
+.resultados-periodos-container .table-responsive {
+    overflow-x: auto;
+    margin-top: 1rem;
+}
+
+.resultados-periodos-container table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 14px;
+}
+
+.resultados-periodos-container .table-dark th {
+    background: #1e3a5f;
+    color: #fff;
+    padding: 10px 12px;
+    text-align: left;
+}
+
+.resultados-periodos-container .table-striped tbody tr:nth-child(odd) {
+    background: #f8fafc;
+}
+
+.resultados-periodos-container .table-striped td {
+    padding: 10px 12px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.resultados-periodos-container .badge {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #fff;
+}
+
+.resultados-periodos-container .bg-success { background: #16a34a; }
+.resultados-periodos-container .bg-warning { background: #d97706; }
+.resultados-periodos-container .bg-danger { background: #dc2626; }
+.resultados-periodos-container .bg-secondary { background: #64748b; }
+
+.resultados-periodos-container .estadisticas .row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-top: 1rem;
+}
+
+.resultados-periodos-container .estadisticas .col-md-3 {
+    flex: 1 1 calc(25% - 12px);
+    min-width: 140px;
+    text-align: center;
+    padding: 14px 10px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+}
+
+.resultados-periodos-container .estadisticas h5 {
+    margin: 0;
+    font-size: 22px;
+}
+
+.resultados-periodos-container .estadisticas small {
+    color: #64748b;
+}
+
+.resultados-periodos-container .text-center { text-align: center; }
+.resultados-periodos-container .mt-4 { margin-top: 1rem; }
+.resultados-periodos-container .mt-2 { margin-top: 0.5rem; }
+.resultados-periodos-container .mb-0 { margin-bottom: 0; }
+.resultados-periodos-container .fs-6 { font-size: 14px; }

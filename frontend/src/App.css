@@ -1,0 +1,158 @@
+// Archivo App.css (legacy): versión anterior del enrutador y layout principal de la aplicación.
+import React from 'react';
+import {
+    BrowserRouter as Router, Routes, Route, Navigate
+}
+
+from 'react-router-dom';
+import {
+    AuthProvider, useAuth
+}
+
+from './contexts/AuthContext';
+import './index.css';
+
+// Layout
+import Navbar from './components/Layout/Navbar';
+import Footer from './components/Layout/Footer';
+
+// Auth
+import Login from './components/Auth/Login';
+
+// Pages Publicas
+import HomePage from './components/HomePage';
+import CulturaInstitucional from './components/CulturaInstitucional';
+import Bachilleratos from './components/Bachilleratos';
+import NuevoIngreso from './components/NuevoIngreso';
+import AreasExtracurriculares from './components/AreasExtracurriculares';
+import Contactanos from './components/Contactanos';
+
+// Dashboards por rol
+import DashboardAdmin from './components/Admin/DashboardAdmin';
+import DashboardDireccion from './components/Direccion/DashboardDireccion';
+import DashboardRegistro from './components/RegistroAcademico/DashboardRegistro';
+import DashboardDocente from './components/Docente/DashboardDocente';
+import DashboardEstudiante from './components/Estudiante/DashboardEstudiante';
+import DashboardEncargado from './components/Encargado/DashboardEncargado';
+
+// Componentes especificos
+import GestionAspirantesDireccion from './components/Direccion/GestionAspirantesDireccion';
+import ConsultaAspirantes from './components/RegistroAcademico/ConsultaAspirantes';
+import InscripcionesRegistro from './components/RegistroAcademico/InscripcionesRegistro';
+import GestionEstudiantes from './components/RegistroAcademico/GestionEstudiantes';
+import NotasEstudiante from './components/Estudiante/NotasEstudiante';
+import AsistenciasEstudiante from './components/Estudiante/AsistenciasEstudiante';
+import NotasEncargado from './components/Encargado/NotasEncargado';
+import AsistenciasEncargado from './components/Encargado/AsistenciasEncargado';
+
+const PrivateRoute = ({ children }) = > {
+    const {
+        user, loading
+    }
+
+    = useAuth();
+    if (loading) return <div className="loading">Cargando...</div>;
+    if (!user) return <Navigate to="/login" />;
+    return children;
+}
+
+;
+
+function AppContent() {
+    const {
+        user
+    }
+
+    = useAuth();
+    console .log('Usuario completo:', user);
+    console .log('Rol:', user?.rol);
+    console .log('Código:', user?.codigo);
+
+    // FORZAR DASHBOARD POR CÓDIGO DE USUARIO (SOLUCIÓN TEMPORAL)
+    const getDashboardByRole = () = > {
+        if (!user) return <HomePage />;
+        const codigo = user.codigo;
+        // Forzar por código if (codigo === 'admin')
+
+{
+    return <DashboardAdmin />;
+}
+
+if (codigo === 'DIR001') {
+    return <DashboardDireccion />;
+}
+
+if (codigo === 'REG001') {
+    return <DashboardRegistro />;
+}
+
+if (codigo === 'DOC001') {
+    return <DashboardDocente />;
+}
+
+if (codigo === '2026-00001-INA') {
+    return <DashboardEstudiante />;
+}
+
+if (codigo === 'ENC001') {
+    return <DashboardEncargado />;
+}
+
+// Si no hay match por código, intentar por rol
+const rol = user.rol;
+if (rol === 'Administrador' || rol === 'administrador') return <DashboardAdmin / >;
+if (rol === 'Direccion' || rol === 'direccion') return <DashboardDireccion / >;
+if (rol === 'Registro_Academico' || rol === 'Registro Academico') return <DashboardRegistro / >;
+if (rol === 'Docente' || rol === 'docente') return <DashboardDocente / >;
+if (rol === 'Estudiante' || rol === 'estudiante') return <DashboardEstudiante / >;
+if (rol === 'Encargado' || rol === 'encargado') return <DashboardEncargado / >;
+
+return <HomePage / >;
+}
+;
+
+return (
+    <div className="app-container">
+      <Navbar />
+      <main className="main-content">
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/cultura" element={<CulturaInstitucional />} />
+          <Route path="/bachilleratos" element={<Bachilleratos />} />
+          <Route path="/nuevo-ingreso" element={<NuevoIngreso />} />
+          <Route path="/areas-extracurriculares" element={<AreasExtracurriculares />} />
+          <Route path="/contactanos" element={<Contactanos />} />
+          <Route path="/login" element={<Login />} />
+          
+          <Route path="/dashboard" element={
+            <PrivateRoute>
+              {getDashboardByRole()}
+            </PrivateRoute>
+          } />
+          
+          <Route path="/registro/consulta-aspirantes" element={<PrivateRoute><ConsultaAspirantes /></PrivateRoute>} />
+          <Route path="/registro/inscripciones" element={<PrivateRoute><InscripcionesRegistro /></PrivateRoute>} />
+          <Route path="/registro/estudiantes" element={<PrivateRoute><GestionEstudiantes /></PrivateRoute>} />
+          <Route path="/direccion/gestion-aspirantes" element={<PrivateRoute><GestionAspirantesDireccion /></PrivateRoute>} />
+          <Route path="/estudiante/notas" element={<PrivateRoute><NotasEstudiante /></PrivateRoute>} />
+          <Route path="/estudiante/asistencias" element={<PrivateRoute><AsistenciasEstudiante /></PrivateRoute>} />
+          <Route path="/encargado/notas" element={<PrivateRoute><NotasEncargado /></PrivateRoute>} />
+          <Route path="/encargado/asistencias" element={<PrivateRoute><AsistenciasEncargado /></PrivateRoute>} />
+        </Routes>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
+function App() {
+    return (
+    <Router>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </Router>
+  );
+}
+
+export default App;

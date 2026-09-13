@@ -1,0 +1,6 @@
+@SistemaAcademicoINA_HostAddress = http://localhost:5228
+
+GET {{SistemaAcademicoINA_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

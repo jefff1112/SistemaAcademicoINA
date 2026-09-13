@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="es-SV">
+<head>
+<meta charset="UTF-8">
+<title>Constancia de Título en Proceso</title>
+<style>
+  @page { size: letter; margin: 1417px 1701px; }
+
+  .constancia {
+    width: 8.5in;
+    min-height: 11in;
+    margin: 0 auto;
+    padding: 0.8in 1in;
+    font-family: "Times New Roman", Times, serif;
+    font-size: 15pt;
+    color: #000;
+    box-sizing: border-box;
+  }
+
+  .constancia__header {
+    display: flex;
+    align-items: center;
+    border: 1px solid #000;
+    padding: 8px 12px;
+    margin-bottom: 36px;
+  }
+
+  .constancia__logo {
+    width: 70px;
+    height: 70px;
+    object-fit: contain;
+    margin-right: 16px;
+  }
+
+  .constancia__header-text {
+    flex: 1;
+    text-align: center;
+    font-weight: bold;
+    font-size: 11pt;
+    line-height: 1.4;
+  }
+
+  .constancia__body {
+    text-align: justify;
+    line-height: 1.8;
+    margin-bottom: 48px;
+  }
+
+  .constancia__var {
+    font-weight: bold;
+  }
+
+  .constancia__cierre {
+    text-align: justify;
+    line-height: 1.8;
+    margin-bottom: 96px;
+  }
+
+  .constancia__firma {
+    text-align: center;
+    line-height: 1.8;
+  }
+
+  @media print {
+    body { margin: 0; }
+    .constancia { box-shadow: none; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="constancia">
+
+    <div class="constancia__header">
+      <img class="constancia__logo" src="{{logoUrl}}" alt="Logo INA">
+      <div class="constancia__header-text">
+        INSTITUTO NACIONAL DE APOPA<br>
+        CALLE "A" COL. MADRE TIERRA, APOPA, SAN SALVADOR<br>
+        TEL- FAX 2216-2772
+      </div>
+    </div>
+
+    <p class="constancia__body">
+      La Suscrita Directora del Instituto Nacional de Apopa, HACE CONSTAR QUE:
+      <span class="constancia__var">{{nombreEstudiante}},</span>
+      ha finalizado sus estudios del
+      <span class="constancia__var">{{nivelBachillerato}}</span>
+       EN <span class="constancia__var">{{especialidad}}</span>, SECCIÓN: "<span class="constancia__var">{{seccion}}</span>",
+      en el año escolar {{anio}}, obteniendo
+      <span class="constancia__var">"{{conducta}}"</span>
+      conducta. Se iniciará el proceso de trámite de legalización de título en el Ministerio de Educación.
+    </p>
+
+    <p class="constancia__cierre">
+      Y, para los usos que el interesado estime conveniente se extiende la presente
+      en la Ciudad de Apopa a los {{dia}} días del mes de {{mes}} de {{anioEmision}}.
+    </p>
+
+    <div class="constancia__firma">
+      {{nombreDirectora}}<br>
+      Directora
+    </div>
+
+  </div>
+
+</body>
+</html>
