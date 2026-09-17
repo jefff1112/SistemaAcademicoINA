@@ -160,10 +160,10 @@ public class NotificacionesController : ControllerBase
                 return Ok(new { mensaje = $"Correo programado para: {request.FechaProgramada.Value.ToString("dd/MM/yyyy HH:mm")}" });
             }
 
-            var emailSettings = _configuration.GetSection("EmailSettings");
-            var smtpServer = emailSettings["Server"] ?? "smtp.gmail.com";
+            var emailSettings = _configuration.GetSection("Smtp");
+            var smtpServer = emailSettings["Host"] ?? "smtp.gmail.com";
             var smtpPort = int.Parse(emailSettings["Port"] ?? "587");
-            var smtpUsername = emailSettings["Username"] ?? "tu_correo@gmail.com";
+            var smtpUsername = emailSettings["User"] ?? "tu_correo@gmail.com";
             var smtpPassword = emailSettings["Password"] ?? "tu_contraseña";
             var smtpFrom = emailSettings["From"] ?? "notificaciones@ina.edu.sv";
             var enableSsl = bool.Parse(emailSettings["EnableSsl"] ?? "true");

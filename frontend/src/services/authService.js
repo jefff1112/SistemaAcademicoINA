@@ -42,3 +42,21 @@ export const getUser = () => {
 export const isAuthenticated = () => {
     return !!localStorage.getItem('token');
 };
+
+// Valida un token de activación y devuelve su estado + datos del estudiante.
+export const validarToken = async (token) => {
+    const response = await API.get(`/auth/validar-token?token=${encodeURIComponent(token)}`);
+    return response.data;
+};
+
+// Activa la cuenta creando la contraseña del estudiante.
+export const activarCuenta = async (token, password) => {
+    const response = await API.post('/auth/activar-cuenta', { token, password });
+    return response.data;
+};
+
+// Solicita un nuevo enlace de activación (notifica a Dirección y Registro Académico).
+export const solicitarNuevoEnlace = async (token) => {
+    const response = await API.post('/activaciones/solicitar-nuevo-enlace', { token });
+    return response.data;
+};

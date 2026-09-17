@@ -13,6 +13,7 @@ const GestionMatriculas = () => {
     const [selectedAspirante, setSelectedAspirante] = useState(null);
     const [showModal, setShowModal] = useState(false);
     const [matriculando, setMatriculando] = useState(false);
+    const [enviarCorreo, setEnviarCorreo] = useState(true);
     const [formData, setFormData] = useState({
         fechaMatricula: new Date().toISOString().split('T')[0],
         numeroExpediente: '',
@@ -108,7 +109,8 @@ const GestionMatriculas = () => {
                 telefonoFijo: formData.telefonoFijo,
                 direccion: formData.direccion,
                 documentosPresentados: formData.documentosPresentados,
-                matriculadoPor: 'Registro Academico'
+                matriculadoPor: 'Registro Academico',
+                enviarCorreo: enviarCorreo
             });
             mostrarMensaje(response.data?.mensaje || 'Estudiante matriculado exitosamente', 'success');
             setShowModal(false);
@@ -362,6 +364,21 @@ const GestionMatriculas = () => {
                                     placeholder="Ej: Partida de nacimiento, notas de noveno grado, DUI..."
                                     style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                                 />
+                            </div>
+                            <div className="form-group" style={{ marginTop: '12px' }}>
+                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: '500', cursor: 'pointer' }}>
+                                    <input
+                                        type="checkbox"
+                                        checked={enviarCorreo}
+                                        onChange={(e) => setEnviarCorreo(e.target.checked)}
+                                    />
+                                    Enviar correo de activación automáticamente
+                                </label>
+                                {!enviarCorreo && (
+                                    <p style={{ color: '#a16207', fontSize: '13px', marginTop: '6px' }}>
+                                        El correo quedará pendiente y podrás enviarlo después desde "Activaciones Pendientes".
+                                    </p>
+                                )}
                             </div>
                             <div className="modal-buttons" style={{ display: 'flex', gap: '12px', marginTop: '20px', justifyContent: 'flex-end' }}>
                                 <button className="btn-cancel" onClick={() => setShowModal(false)} style={{ padding: '8px 20px', background: '#e5e7eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancelar</button>

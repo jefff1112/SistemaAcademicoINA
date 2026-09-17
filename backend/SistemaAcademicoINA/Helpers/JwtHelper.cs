@@ -40,7 +40,33 @@ public string GenerarToken(int idUsuario, string codigo, string rol)
         SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
     };
 
-    var token = tokenHandler.CreateToken(tokenDescriptor);
+var token = tokenHandler.CreateToken(tokenDescriptor);
     return tokenHandler.WriteToken(token);
 }
+
+    // Genera un token JWT de UN SOLO USO para activación de cuenta (expira en 48 horas).
+    // Contiene: id de usuario, correo y propósito "activacionCuenta".
+    public string GenerarTokenActivacion(int idUsuario, string email)
+    {
+        var tokenHandler = new JwtSecurityTokenHandler();
+        var key = Encoding.UTF8.GetBytes(_configuration["Jwt:Key"] ?? "TuClaveSecretaSuperSeguraDeAlMenos32Caracteres!");
+        var issuer = _configuration["Jwt:Issuer"] ?? "SistemaAcademicoINA";
+
+        var tokenDescriptor = new SecurityTokenDescriptor
+        {
+            Subject = new ClaimsIdentity(new[]
+            {
+                new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                new Claim(ClaimTypes.NameIdentifier, idUsuario.ToString()),
+                new Claim(ClaimTypes.Email, email),
+                new Claim("proposito", "activacionCuenta")
+            }),
+            Issuer = issuer,
+            Expires = DateTime.UtcNow.AddHours(48),
+            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+        };
+
+        var token = tokenHandler.CreateToken(tokenDescriptor);
+        return tokenHandler.WriteToken(token);
+    }
 }

@@ -25,13 +25,17 @@ public class Usuario
     public string? Correo { get; set; }
 
     [Column("contrasena")]
-    public string Contrasena { get; set; } = string.Empty;
+    public string? Contrasena { get; set; }
 
     [Column("rol_id")]
     public int RolId { get; set; }
 
     [Column("estado")]
     public bool Estado { get; set; } = true;
+
+    // PendienteActivacion / PendienteEnvioManual / EsperaActivacion / Activo
+    [Column("estado_activacion")]
+    public string? EstadoActivacion { get; set; }
 
     [ForeignKey("RolId")]
     public virtual Rol? Rol { get; set; }

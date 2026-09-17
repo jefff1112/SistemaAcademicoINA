@@ -180,3 +180,61 @@ git push origin main
 - 🔒 Los archivos `appsettings.json` y `.env` **NO se suben a Git** (están en el Drive).
 - 🚫 No subas `node_modules`, `bin`, `obj` ni `build` (ya están ignorados).
 - Si hay **conflicto** al hacer `git pull origin main`, resuélvelo en el archivo y vuelve a commitear.
+
+---
+
+## 9. Activación de cuentas por correo (nuevo ingreso)
+
+### 9.1 Variables de entorno / configuración
+
+Se requiere la sección `Smtp` y la URL del frontend en `backend/SistemaAcademicoINA/appsettings.json` (usa `appsettings.example.json` como plantilla):
+
+```json
+{
+  "FrontendUrl": "http://localhost:3000",
+  "Smtp": {
+    "Host": "smtp.gmail.com",
+    "Port": 587,
+    "User": "sistemaacademicoina@gmail.com",
+    "Password": "PONER_AQUI_APP_PASSWORD_DE_GMAIL",
+    "From": "notificaciones@ina.edu.sv",
+    "FromName": "INA - Sistema Académico",
+    "EnableSsl": true
+  }
+}
+```
+
+> **Gmail App Password**: entra a tu cuenta de Google → Seguridad → Verificación en dos pasos → *Contraseñas de aplicaciones* → genera una para "Correo" y pégala en `Password`. **No uses la contraseña de tu cuenta.**
+
+### 9.2 Aplicar la migración de base de datos
+
+Ejecuta en MySQL el script `backend/migrations/18_activacion_cuentas_reportes.sql`, que:
+- Permite contraseña nula en `usuarios` (`contrasena` NULLable).
+- Agrega `usuarios.estado_activacion`.
+- Crea las tablas `tokens_activacion` y `reportes_datos_estudiante`.
+
+```bash
+mysql -u root sistema_academico < backend/migrations/18_activacion_cuentas_reportes.sql
+```
+
+### 9.3 Cómo probar el flujo completo
+
+1. **Registro Académico** aprueba y matricula a un aspirante (menú *Matriculas*). Deja marcado **"Enviar correo de activación automáticamente"**.
+2. El sistema crea el estudiante, su usuario (`estado=false`, sin contraseña) y un **token de 48 h**, y encola el correo de bienvenida.
+3. Revisa el correo (o la tabla `tokens_activacion`) y abre `http://localhost:3000/activar-cuenta?token=XXXX`.
+4. La página muestra los datos del estudiante; crea la contraseña (mín. 8 caracteres, 1 mayúscula, 1 número).
+5. Opcional: **"Reportar dato incorrecto"** → envía uno o varios reportes (notifica a Dirección y Registro Académico).
+6. **Dirección/Registro** → menú **"Reportes de Datos"**: aprobar/rechazar/en revisión.
+7. Si el enlace expira o el envío fue manual, usa **"Activaciones Pendientes"** para reenviar, marcar en espera o activar presencialmente.
+
+### 9.4 Ende­points nuevos
+
+| Método | Ruta | Descripción |
+|---|---|---|
+| GET | `/api/auth/validar-token?token=` | Valida el token de activación |
+| POST | `/api/auth/activar-cuenta` | Crea la contraseña y activa la cuenta |
+| POST | `/api/reportes-datos` | Crea reportes de datos (con token) |
+| GET/PUT | `/api/reportes-datos(/{id}/aprobar\|rechazar\|en-revision)` | Gestión de reportes |
+| GET/POST | `/api/activaciones/pendientes`, `/api/activaciones/{id}/reenviar\|marcar-espera\|activar-presencial` | Gestión de activaciones |
+
+> Las plantillas de correo están en `backend/SistemaAcademicoINA/Templates/Emails/` y el envío se procesa en background (cola `Channel<T>`), sin bloquear las respuestas HTTP.

@@ -114,6 +114,12 @@ public class ApplicationDbContext : DbContext
     // Auditoría de Calificaciones (cambios de notas con observaciones)
     public DbSet<CalificacionAuditoria> CalificacionesAuditoria { get; set; }
 
+    // Activación de cuentas por correo
+    public DbSet<TokenActivacion> TokensActivacion { get; set; }
+
+    // Reportes de datos incorrectos de estudiantes
+    public DbSet<ReporteDatoEstudiante> ReportesDatosEstudiante { get; set; }
+
     // Configuración del modelo: índices únicos y compuestos, índices de rendimiento, precisiones decimales y mapeos de tablas.
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -1168,6 +1174,51 @@ public class ApplicationDbContext : DbContext
                 .WithMany()
                 .HasForeignKey(e => e.IdUsuarioCambio)
                 .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ============================================================
+        // CONFIGURACIÓN: TokenActivacion
+        // ============================================================
+        modelBuilder.Entity<TokenActivacion>(entity =>
+        {
+            entity.HasIndex(t => t.Token)
+                .HasDatabaseName("idx_token");
+
+            entity.HasIndex(t => t.UsuarioId)
+                .HasDatabaseName("idx_tokens_usuario");
+
+            entity.HasIndex(t => t.FechaExpiracion)
+                .HasDatabaseName("idx_tokens_expiracion");
+
+            entity.HasOne(t => t.Usuario)
+                .WithMany()
+                .HasForeignKey(t => t.UsuarioId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // ============================================================
+        // CONFIGURACIÓN: ReporteDatoEstudiante
+        // ============================================================
+        modelBuilder.Entity<ReporteDatoEstudiante>(entity =>
+        {
+            entity.HasIndex(r => r.EstudianteId)
+                .HasDatabaseName("idx_reporte_estudiante");
+
+            entity.HasIndex(r => r.Estado)
+                .HasDatabaseName("idx_reporte_estado");
+
+            entity.HasIndex(r => r.FechaCreacion)
+                .HasDatabaseName("idx_reporte_fecha");
+
+            entity.HasOne(r => r.Estudiante)
+                .WithMany()
+                .HasForeignKey(r => r.EstudianteId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(r => r.ResueltoPorUsuario)
+                .WithMany()
+                .HasForeignKey(r => r.ResueltoPor)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

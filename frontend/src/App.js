@@ -3,6 +3,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import Login from './components/Auth/Login';
+import ActivarCuenta from './components/Auth/ActivarCuenta';
 import PrivateRoute from './components/Auth/PrivateRoute';
 import PublicLayout from './components/Layout/PublicLayout';
 
@@ -88,6 +89,8 @@ import ExportarBoletasRegistro from './components/RegistroAcademico/ExportarBole
 import CuadroAuxiliarRegistro from './components/RegistroAcademico/CuadroAuxiliarDigital';
 import BoletaNotasEstudianteRegistro from './components/RegistroAcademico/BoletaNotasEstudiante';
 import GestionConstanciasRegistro from './components/RegistroAcademico/GestionConstancias';
+import ReportesDatos from './components/RegistroAcademico/ReportesDatos';
+import ActivacionesPendientes from './components/RegistroAcademico/ActivacionesPendientes';
 
 // Docente
 import DashboardDocente from './components/Docente/DashboardDocente';
@@ -132,6 +135,7 @@ function App() {
                     {/* Rutas Públicas */}
                     <Route path="/" element={<PublicLayout><HomePage /></PublicLayout>} />
                     <Route path="/login" element={<Login />} />
+                    <Route path="/activar-cuenta" element={<ActivarCuenta />} />
                     <Route path="/nuevo-ingreso" element={<PublicLayout><NuevoIngreso /></PublicLayout>} />
                     <Route path="/cultura-institucional" element={<PublicLayout><CulturaInstitucional /></PublicLayout>} />
                     <Route path="/contactanos" element={<PublicLayout><Contactanos /></PublicLayout>} />
@@ -179,6 +183,8 @@ function App() {
                     <Route path="/direccion/actividades" element={<PrivateRoute><ActividadesConsultaDireccion /></PrivateRoute>} />
                     <Route path="/direccion/cuadro-notas-consulta" element={<PrivateRoute><CuadroAuxiliarConsultaDireccion /></PrivateRoute>} />
                     <Route path="/direccion/exportaciones" element={<PrivateRoute><ExportacionesExcelDireccion /></PrivateRoute>} />
+                    <Route path="/direccion/reportes-datos" element={<PrivateRoute><ReportesDatos /></PrivateRoute>} />
+                    <Route path="/direccion/activaciones-pendientes" element={<PrivateRoute><ActivacionesPendientes /></PrivateRoute>} />
 
                     {/* REGISTRO ACADEMICO */}
                     <Route path="/registro/dashboard" element={<PrivateRoute><DashboardRegistro /></PrivateRoute>} />
@@ -203,6 +209,8 @@ function App() {
                     <Route path="/registro/actividades" element={<PrivateRoute><ActividadesConsultaRegistro /></PrivateRoute>} />
                     <Route path="/registro/cuadro-notas-consulta" element={<PrivateRoute><CuadroAuxiliarConsultaRegistro /></PrivateRoute>} />
                     <Route path="/registro/exportaciones" element={<PrivateRoute><ExportacionesExcelRegistro /></PrivateRoute>} />
+                    <Route path="/registro/reportes-datos" element={<PrivateRoute><ReportesDatos /></PrivateRoute>} />
+                    <Route path="/registro/activaciones-pendientes" element={<PrivateRoute><ActivacionesPendientes /></PrivateRoute>} />
 
                     {/* DOCENTE */}
                     <Route path="/docente/dashboard" element={<PrivateRoute><DashboardDocente /></PrivateRoute>} />

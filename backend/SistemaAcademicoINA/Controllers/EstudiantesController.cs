@@ -170,6 +170,8 @@ public class EstudiantesController : ControllerBase
             if (existe)
                 return BadRequest(new { mensaje = "Ya existe otro estudiante con ese código" });
 
+            var correoAnterior = estudiante.CorreoEstudiante;
+
             estudiante.Nombres = request.Nombres;
             estudiante.Apellidos = request.Apellidos;
             estudiante.CodigoEstudiante = request.CodigoEstudiante;
@@ -180,6 +182,30 @@ public class EstudiantesController : ControllerBase
             estudiante.Direccion = request.Direccion;
             estudiante.IdClase = request.IdClase;
             estudiante.Estado = request.Estado;
+
+            // Sincronizar el correo (y nombres) con el usuario y aspirante vinculados, si existen.
+            var correoCambio = request.CorreoEstudiante != correoAnterior;
+
+            var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.Codigo == estudiante.CodigoEstudiante);
+            if (usuario != null)
+            {
+                if (correoCambio)
+                    usuario.Correo = request.CorreoEstudiante;
+                usuario.Nombres = request.Nombres;
+                usuario.Apellidos = request.Apellidos;
+            }
+
+            if (estudiante.IdAspiranteOrigen.HasValue)
+            {
+                var aspirante = await _context.Aspirantes.FindAsync(estudiante.IdAspiranteOrigen.Value);
+                if (aspirante != null)
+                {
+                    if (correoCambio)
+                        aspirante.Correo = request.CorreoEstudiante;
+                    aspirante.Nombres = request.Nombres;
+                    aspirante.Apellidos = request.Apellidos;
+                }
+            }
 
             await _context.SaveChangesAsync();
 

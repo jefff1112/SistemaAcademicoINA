@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SistemaAcademicoINA.Data;
+using SistemaAcademicoINA.Helpers;
 using SistemaAcademicoINA.Models.Entities;
+using SistemaAcademicoINA.Services;
 using BCryptHelper = BCrypt.Net.BCrypt;
 
 namespace SistemaAcademicoINA.Controllers;
@@ -15,11 +17,19 @@ public class AspirantesController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly IWebHostEnvironment _environment;
+    private readonly IEmailService _emailService;
+    private readonly JwtHelper _jwtHelper;
+    private readonly IConfiguration _configuration;
+    private readonly PlantillasCorreoService _plantillasCorreo;
 
-    public AspirantesController(ApplicationDbContext context, IWebHostEnvironment environment)
+    public AspirantesController(ApplicationDbContext context, IWebHostEnvironment environment, IEmailService emailService, JwtHelper jwtHelper, IConfiguration configuration, PlantillasCorreoService plantillasCorreo)
     {
         _context = context;
         _environment = environment;
+        _emailService = emailService;
+        _jwtHelper = jwtHelper;
+        _configuration = configuration;
+        _plantillasCorreo = plantillasCorreo;
     }
 
     // GET: obtiene la lista de aspirantes ordenados por fecha de solicitud.
@@ -585,6 +595,10 @@ public class AspirantesController : ControllerBase
                 && await _context.Estudiantes.AnyAsync(e => e.CorreoEstudiante == aspirante.Correo))
                 return Conflict(new { mensaje = $"Ya existe un estudiante matriculado con el correo {aspirante.Correo}. No se puede registrar la misma inscripción dos veces.", duplicado = true });
 
+            if (!string.IsNullOrEmpty(aspirante.Correo)
+                && await _context.Usuarios.AnyAsync(u => u.Correo == aspirante.Correo))
+                return Conflict(new { mensaje = $"El correo {aspirante.Correo} ya está registrado en el sistema. No se puede matricular la misma cuenta." });
+
             if (!string.IsNullOrEmpty(aspirante.Dui) || !string.IsNullOrEmpty(aspirante.Nie))
             {
                 var solicitudDuplicada = await _context.Aspirantes
@@ -680,45 +694,82 @@ public class AspirantesController : ControllerBase
             if (!string.IsNullOrWhiteSpace(inscripcion.NumeroExpediente))
                 aspirante.NumeroExpediente = inscripcion.NumeroExpediente;
 
-            // Creación del usuario de acceso dentro de la misma transacción.
+            // Creación del usuario de acceso (pendiente de activación) dentro de la misma transacción.
+            // El correo ya fue validado como no registrado; se crea sin contraseña (estado pendiente).
+            var enviarCorreo = request.EnviarCorreo != false; // por defecto TRUE (automático)
             if (!string.IsNullOrEmpty(aspirante.Correo))
             {
-                var usuarioExistente = await _context.Usuarios
-                    .FirstOrDefaultAsync(u => u.Correo == aspirante.Correo || u.Codigo == estudiante.CodigoEstudiante);
-
-                if (usuarioExistente == null)
+                var nuevoUsuario = new Usuario
                 {
-                    var nuevoUsuario = new Usuario
-                    {
-                        Codigo = estudiante.CodigoEstudiante,
-                        Nombres = aspirante.Nombres ?? "",
-                        Apellidos = aspirante.Apellidos ?? "",
-                        Correo = aspirante.Correo,
-                        Contrasena = BCryptHelper.HashPassword("123456"),
-                        RolId = 7,
-                        Estado = true
-                    };
+                    Codigo = estudiante.CodigoEstudiante,
+                    Nombres = aspirante.Nombres ?? "",
+                    Apellidos = aspirante.Apellidos ?? "",
+                    Correo = aspirante.Correo,
+                    Contrasena = null, // sin acceso hasta activar la cuenta
+                    RolId = 7,         // Estudiante
+                    Estado = false,    // inactivo hasta activación
+                    EstadoActivacion = enviarCorreo ? "PendienteActivacion" : "PendienteEnvioManual"
+                };
 
-                    _context.Usuarios.Add(nuevoUsuario);
+                _context.Usuarios.Add(nuevoUsuario);
+                await _context.SaveChangesAsync();
+
+                // En modo automático se genera el token y se envía el correo; en modo manual
+                // NO se genera token: quedará como "Pendiente manual" y se generará al reenviar desde el panel.
+                if (enviarCorreo)
+                {
+                    var tokenActivacion = _jwtHelper.GenerarTokenActivacion(nuevoUsuario.IdUsuario, aspirante.Correo);
+                    _context.TokensActivacion.Add(new TokenActivacion
+                    {
+                        UsuarioId = nuevoUsuario.IdUsuario,
+                        Token = tokenActivacion,
+                        FechaCreacion = DateTime.Now,
+                        FechaExpiracion = DateTime.Now.AddHours(48),
+                        Usado = false,
+                        CreatedAt = DateTime.Now
+                    });
+                    await _context.SaveChangesAsync();
+
+                    await _emailService.EncolarAsync(new EmailMessage
+                    {
+                        Destinatario = aspirante.Correo,
+                        Asunto = "¡Felicidades! Has sido aceptado en el INA",
+                        CuerpoHtml = await GenerarHtmlBienvenida($"{aspirante.Nombres} {aspirante.Apellidos}", tokenActivacion)
+                    });
                 }
             }
 
             await _context.SaveChangesAsync();
             await transaction.CommitAsync();
 
-            // Registrar en auditoria
+            // Registrar en auditoria: matrícula + correo de activación (auto/manual).
             try
             {
-                var auditoria = new Auditoria
+                _context.Auditoria.Add(new Auditoria
                 {
                     Usuario = matriculadoPor,
                     Accion = "Matricular",
-                    Detalle = $"Aspirante {aspirante.Nombres} {aspirante.Apellidos} matriculado como estudiante (ID: {estudiante.IdEstudiante}, código {estudiante.CodigoEstudiante}) en la clase {clase.NombreClase}",
+                    Detalle = $"Matrícula aceptada por {matriculadoPor} el {DateTime.Now:dd/MM/yyyy HH:mm}. Aspirante {aspirante.Nombres} {aspirante.Apellidos} matriculado como estudiante (ID: {estudiante.IdEstudiante}, código {estudiante.CodigoEstudiante}) en la clase {clase.NombreClase}",
                     Ip = HttpContext.Connection.RemoteIpAddress?.ToString(),
                     Fecha = DateTime.Now,
                     CreatedAt = DateTime.Now
-                };
-                _context.Auditoria.Add(auditoria);
+                });
+
+                if (!string.IsNullOrEmpty(aspirante.Correo))
+                {
+                    _context.Auditoria.Add(new Auditoria
+                    {
+                        Usuario = matriculadoPor,
+                        Accion = "CorreoActivacion",
+                        Detalle = enviarCorreo
+                            ? $"Correo de activación enviado a {aspirante.Correo} (automático)"
+                            : $"Correo de activación pendiente de envío manual a {aspirante.Correo}",
+                        Ip = HttpContext.Connection.RemoteIpAddress?.ToString(),
+                        Fecha = DateTime.Now,
+                        CreatedAt = DateTime.Now
+                    });
+                }
+
                 await _context.SaveChangesAsync();
             }
             catch (Exception ex)
@@ -850,6 +901,8 @@ public class AspirantesController : ControllerBase
             if (aspirante == null)
                 return NotFound(new { mensaje = "Aspirante no encontrado" });
 
+            var correoAnterior = aspirante.Correo;
+
             if (!string.IsNullOrEmpty(request.Nombres))
                 aspirante.Nombres = request.Nombres;
 
@@ -884,6 +937,36 @@ public class AspirantesController : ControllerBase
                 var estadosValidos = new[] { "Pendiente", "En Espera", "Aprobado", "Rechazado" };
                 if (estadosValidos.Contains(request.EstadoSolicitud))
                     aspirante.EstadoSolicitud = request.EstadoSolicitud;
+            }
+
+            // Sincronizar el correo (y nombres) con el estudiante y usuario vinculados, si existen.
+            var correoCambio = !string.IsNullOrEmpty(request.Correo) && request.Correo != correoAnterior;
+            if (correoCambio || !string.IsNullOrEmpty(request.Nombres) || !string.IsNullOrEmpty(request.Apellidos))
+            {
+                var estudiante = await _context.Estudiantes
+                    .FirstOrDefaultAsync(e => e.IdAspiranteOrigen == aspirante.IdAspirante
+                        || (aspirante.IdEstudianteGenerado.HasValue && e.IdEstudiante == aspirante.IdEstudianteGenerado.Value));
+
+                if (estudiante != null)
+                {
+                    if (correoCambio)
+                        estudiante.CorreoEstudiante = aspirante.Correo;
+                    if (!string.IsNullOrEmpty(request.Nombres))
+                        estudiante.Nombres = request.Nombres;
+                    if (!string.IsNullOrEmpty(request.Apellidos))
+                        estudiante.Apellidos = request.Apellidos;
+
+                    var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.Codigo == estudiante.CodigoEstudiante);
+                    if (usuario != null)
+                    {
+                        if (correoCambio)
+                            usuario.Correo = aspirante.Correo;
+                        if (!string.IsNullOrEmpty(request.Nombres))
+                            usuario.Nombres = request.Nombres;
+                        if (!string.IsNullOrEmpty(request.Apellidos))
+                            usuario.Apellidos = request.Apellidos;
+                    }
+                }
             }
 
             await _context.SaveChangesAsync();
@@ -1064,6 +1147,19 @@ public class AspirantesController : ControllerBase
 
         return null;
     }
+
+    // Genera el HTML del correo de bienvenida/activación usando la plantilla Templates/Emails.
+    private async Task<string> GenerarHtmlBienvenida(string nombreEstudiante, string token)
+    {
+        var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+        var enlace = $"{frontendUrl}/activar-cuenta?token={token}";
+
+        return await _plantillasCorreo.RenderizarAsync("bienvenida_activacion", new Dictionary<string, string>
+        {
+            { "nombreEstudiante", nombreEstudiante },
+            { "enlace", enlace }
+        });
+    }
 }
 
 public class AprobarAspiranteRequest
@@ -1082,6 +1178,8 @@ public class MatricularAspiranteRequest
     public string? Direccion { get; set; }
     public string? DocumentosPresentados { get; set; }
     public string MatriculadoPor { get; set; } = "Registro Academico";
+    // true/nulo = enviar correo automáticamente; false = enviar manualmente después.
+    public bool? EnviarCorreo { get; set; }
 }
 
 public class RegistrarNotaExamenRequest

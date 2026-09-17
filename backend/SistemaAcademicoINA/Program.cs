@@ -36,6 +36,13 @@ builder.Services.AddScoped<AuditoriaHelper>();
 // 2b. HttpContextAccessor (usado por AuditoriaController)
 builder.Services.AddHttpContextAccessor();
 
+// 2c. Correo electrónico (MailKit + cola en background)
+builder.Services.AddSingleton<EmailQueue>();
+builder.Services.AddSingleton<IEmailService, SmtpEmailService>();
+builder.Services.AddHostedService<EmailBackgroundService>();
+builder.Services.AddSingleton<PlantillasCorreoService>();
+builder.Services.AddSingleton<RateLimiterService>();
+
 // 3. AUTENTICACIÓN JWT
 // Configura la autenticación con tokens JWT y la validación de la firma simétrica.
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "TuClaveSecretaSuperSeguraDeAlMenos32Caracteres!";
