@@ -22,7 +22,9 @@ public class DocumentosEstudiantesController : ControllerBase
         _context = context;
     }
 
-    // GET: obtiene los documentos de un estudiante (ordenados por fecha descendente).
+    // ============================================================
+    // GET: Obtiene los documentos de un estudiante
+    // ============================================================
     [HttpGet("estudiante/{idEstudiante}")]
     public async Task<ActionResult> GetDocumentosByEstudiante(int idEstudiante)
     {
@@ -40,6 +42,12 @@ public class DocumentosEstudiantesController : ControllerBase
                     d.Fecha,
                     tieneDocumento = !string.IsNullOrEmpty(d.Documento),
                     d.NombreArchivo,
+                    // Extensión del archivo (para que el frontend sepa si es PDF, imagen, etc.)
+                    extension = !string.IsNullOrEmpty(d.NombreArchivo)
+                        ? Path.GetExtension(d.NombreArchivo).ToLowerInvariant()
+                        : (!string.IsNullOrEmpty(d.Documento)
+                            ? Path.GetExtension(d.Documento).ToLowerInvariant()
+                            : ""),
                     d.RegistradoPor,
                     d.CreatedAt
                 })
@@ -53,7 +61,65 @@ public class DocumentosEstudiantesController : ControllerBase
         }
     }
 
-    // POST: agrega un documento a un estudiante (personal). El archivo adjunto es opcional.
+    // ============================================================
+    // GET: Obtiene los documentos de todos los estudiantes de una clase
+    // Optimización para el modo "Por Clase" del frontend
+    // ============================================================
+    [HttpGet("clase/{idClase}")]
+    public async Task<ActionResult> GetDocumentosByClase(int idClase)
+    {
+        try
+        {
+            // Obtener los IDs de los estudiantes matriculados en la clase
+            var estudiantesIds = await _context.Inscripciones
+                .Where(i => i.IdClase == idClase && i.EstadoInscripcion == "Confirmada")
+                .Select(i => i.IdEstudiante)
+                .ToListAsync();
+
+            if (!estudiantesIds.Any())
+                return Ok(new Dictionary<int, object>());
+
+            // Obtener todos los documentos de esos estudiantes
+            var documentos = await _context.DocumentosEstudiantes
+                .Where(d => estudiantesIds.Contains(d.IdEstudiante))
+                .OrderByDescending(d => d.Fecha)
+                .ToListAsync();
+
+            // Agrupar por estudiante
+            var resultado = documentos
+                .GroupBy(d => d.IdEstudiante)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (object)g.Select(d => new
+                    {
+                        d.IdDocumento,
+                        d.IdEstudiante,
+                        d.Tipo,
+                        d.Nombre,
+                        d.Fecha,
+                        tieneDocumento = !string.IsNullOrEmpty(d.Documento),
+                        d.NombreArchivo,
+                        extension = !string.IsNullOrEmpty(d.NombreArchivo)
+                            ? Path.GetExtension(d.NombreArchivo).ToLowerInvariant()
+                            : (!string.IsNullOrEmpty(d.Documento)
+                                ? Path.GetExtension(d.Documento).ToLowerInvariant()
+                                : ""),
+                        d.RegistradoPor,
+                        d.CreatedAt
+                    }).ToList()
+                );
+
+            return Ok(resultado);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { mensaje = "Error al obtener documentos de la clase", error = ex.Message });
+        }
+    }
+
+    // ============================================================
+    // POST: Agrega un documento a un estudiante (personal)
+    // ============================================================
     [Authorize(Roles = "Administrador,Director,Sub Director,Registro Academico")]
     [HttpPost]
     public async Task<IActionResult> PostDocumento([FromForm] DocumentoEstudianteRequest request)
@@ -86,6 +152,8 @@ public class DocumentosEstudiantesController : ControllerBase
             if (request.Archivo != null && request.Archivo.Length > 0)
             {
                 documento.Documento = await GuardarArchivoAsync(documento.IdEstudiante, request.Archivo);
+                // IMPORTANTE: Guardar el nombre original del archivo para poder descargarlo con su extensión correcta
+                documento.NombreArchivo = Path.GetFileName(request.Archivo.FileName);
                 await _context.SaveChangesAsync();
             }
 
@@ -97,9 +165,11 @@ public class DocumentosEstudiantesController : ControllerBase
         }
     }
 
-    // GET: descarga el archivo adjunto del documento.
+    // ============================================================
+    // GET: Descarga o visualiza el archivo adjunto del documento
+    // ============================================================
     [HttpGet("{id}/descargar")]
-    public async Task<IActionResult> DescargarDocumento(int id)
+    public async Task<IActionResult> DescargarDocumento(int id, [FromQuery] bool inline = false)
     {
         try
         {
@@ -114,11 +184,48 @@ public class DocumentosEstudiantesController : ControllerBase
             if (!System.IO.File.Exists(physicalPath))
                 return NotFound(new { mensaje = "El archivo ya no existe en el servidor" });
 
+            // Determinar el nombre real del archivo (con su extensión)
             var fileName = !string.IsNullOrEmpty(documento.NombreArchivo)
                 ? documento.NombreArchivo
                 : Path.GetFileName(documento.Documento);
 
-            return PhysicalFile(physicalPath, "application/octet-stream", fileName);
+            // Detectar el MIME type correcto según la extensión
+            var extension = Path.GetExtension(fileName)?.ToLowerInvariant() ?? "";
+            var mimeType = extension switch
+            {
+                ".pdf" => "application/pdf",
+                ".png" => "image/png",
+                ".jpg" or ".jpeg" => "image/jpeg",
+                ".gif" => "image/gif",
+                ".webp" => "image/webp",
+                ".bmp" => "image/bmp",
+                ".svg" => "image/svg+xml",
+                ".doc" => "application/msword",
+                ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                ".xls" => "application/vnd.ms-excel",
+                ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                ".ppt" => "application/vnd.ms-powerpoint",
+                ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                ".txt" => "text/plain",
+                ".zip" => "application/zip",
+                _ => "application/octet-stream"
+            };
+
+            // Si es inline=true, el navegador intentará mostrarlo (útil para PDFs e imágenes)
+            var disposition = inline ? "inline" : "attachment";
+
+            // Abrir el stream del archivo
+            var stream = new FileStream(physicalPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+
+            // Configurar el Content-Disposition con el nombre correcto (soporta UTF-8)
+            Response.Headers["Content-Disposition"] =
+                $"{disposition}; filename=\"{fileName}\"; filename*=UTF-8''{Uri.EscapeDataString(fileName)}";
+
+            return new FileStreamResult(stream, mimeType)
+            {
+                FileDownloadName = fileName,
+                EnableRangeProcessing = true
+            };
         }
         catch (Exception ex)
         {
@@ -126,7 +233,9 @@ public class DocumentosEstudiantesController : ControllerBase
         }
     }
 
-    // DELETE: elimina el documento (y su archivo físico) de forma definitiva.
+    // ============================================================
+    // DELETE: Elimina el documento (y su archivo físico)
+    // ============================================================
     [Authorize(Roles = "Administrador,Director,Sub Director,Registro Academico")]
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeleteDocumento(int id)
@@ -155,7 +264,9 @@ public class DocumentosEstudiantesController : ControllerBase
         }
     }
 
-    // Guarda el archivo en disco (una carpeta por estudiante) y devuelve la ruta relativa.
+    // ============================================================
+    // MÉTODO PRIVADO: Guarda el archivo en disco
+    // ============================================================
     private async Task<string> GuardarArchivoAsync(int idEstudiante, IFormFile archivo)
     {
         var uploadsFolder = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "documentos_estudiantes", idEstudiante.ToString());
@@ -175,6 +286,9 @@ public class DocumentosEstudiantesController : ControllerBase
     }
 }
 
+// ============================================================
+// DTO de request
+// ============================================================
 public class DocumentoEstudianteRequest
 {
     public int IdEstudiante { get; set; }
