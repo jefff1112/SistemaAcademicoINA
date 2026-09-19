@@ -1,13 +1,14 @@
-using Microsoft.Playwright;
+using ClosedXML.Excel;
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
-using ClosedXML.Excel;
-using System.Text;
-using System.Text.RegularExpressions;
+using Microsoft.Playwright;
+using SistemaAcademicoINA.Models.Entities;
+using System;
+using System.Collections.Generic;
 using System.IO;
-
-namespace SistemaAcademicoINA.Services;
+using System.Linq;
+using System.Threading.Tasks;
 
 public enum FormatoDocumento
 {
@@ -69,9 +70,12 @@ public class DocumentoService
         Dictionary<string, string> reemplazos, string codigoEstudiante)
     {
         var templatePath = Path.Combine(_env.ContentRootPath, "Plantillas", "HTML", "PlantillaHTMLConstanciaTituloEnProceso.html");
+
+        if (!File.Exists(templatePath))
+            throw new FileNotFoundException($"No se encontró la plantilla HTML en: {templatePath}");
+
         var html = await File.ReadAllTextAsync(templatePath);
 
-        // Embed logo as base64 so Playwright can render it
         var logoPath = Path.Combine(_env.WebRootPath, "images", "logo-ina.png");
         string logoDataUri = "";
         if (File.Exists(logoPath))
@@ -120,23 +124,23 @@ public class DocumentoService
         Dictionary<string, string> reemplazos, string codigoEstudiante)
     {
         var templatePath = Path.Combine(_env.ContentRootPath, "Plantillas", "Word", "PlantillaConstanciaTituloEnProceso.docx");
-        
+
         using var ms = new MemoryStream();
-        
+
         if (File.Exists(templatePath))
         {
             var bytes = await File.ReadAllBytesAsync(templatePath);
             ms.Write(bytes, 0, bytes.Length);
             ms.Position = 0;
         }
-        
+
         using (var doc = WordprocessingDocument.Open(ms, true))
         {
             var body = doc.MainDocumentPart?.Document.Body;
             if (body != null)
             {
                 ReplaceTextInParagraphs(body.Descendants<Paragraph>(), reemplazos);
-                
+
                 foreach (var table in body.Descendants<Table>())
                 {
                     foreach (var cell in table.Descendants<TableCell>())
@@ -146,8 +150,8 @@ public class DocumentoService
                 }
             }
         }
-        
-        return (ms.ToArray(), $"constancia_{codigoEstudiante}.docx", 
+
+        return (ms.ToArray(), $"constancia_{codigoEstudiante}.docx",
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     }
 
@@ -161,18 +165,18 @@ public class DocumentoService
                 {
                     var originalText = text.Text;
                     var newText = originalText;
-                    
+
                     foreach (var kvp in reemplazos)
                     {
                         var placeholder = "{{" + kvp.Key + "}}";
                         var placeholderWithSpaces = "{{ " + kvp.Key + " }}";
                         var placeholderWithExtraSpaces = "{{  " + kvp.Key + "  }}";
-                        
+
                         newText = newText.Replace(placeholder, kvp.Value ?? "");
                         newText = newText.Replace(placeholderWithSpaces, kvp.Value ?? "");
                         newText = newText.Replace(placeholderWithExtraSpaces, kvp.Value ?? "");
                     }
-                    
+
                     if (newText != originalText)
                     {
                         text.Text = newText;
@@ -186,7 +190,7 @@ public class DocumentoService
         Dictionary<string, string> reemplazos, string codigoEstudiante)
     {
         var templatePath = Path.Combine(_env.WebRootPath, "Plantillas", "Excel", "constancia_titulo.xlsx");
-        
+
         using var wb = File.Exists(templatePath)
             ? new XLWorkbook(templatePath)
             : new XLWorkbook();
@@ -199,7 +203,7 @@ public class DocumentoService
             ws.Cell(1, 2).Value = "Valor";
             ws.Row(1).Style.Font.Bold = true;
             ws.Row(1).Style.Fill.BackgroundColor = XLColor.LightBlue;
-            
+
             int row = 2;
             foreach (var kvp in reemplazos)
             {
@@ -207,7 +211,7 @@ public class DocumentoService
                 ws.Cell(row, 2).Value = kvp.Value;
                 row++;
             }
-            
+
             ws.Columns().AdjustToContents();
         }
         else
@@ -237,55 +241,44 @@ public class DocumentoService
     }
 
     // -------------------------------------------------------
-    // NUEVO: Generar Word combinado (múltiples estudiantes, salto de página por cada uno)
-    // Construye el documento programáticamente para evitar problemas de merging
+    // CORREGIDO: Generar Word combinado
     // -------------------------------------------------------
     public async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarWordCombinadoTituloProcesoAsync(
         List<Dictionary<string, string>> listaReemplazos, int idClase)
     {
         var templatePath = Path.Combine(_env.ContentRootPath, "Plantillas", "Word", "PlantillaConstanciaTituloEnProceso.docx");
+
+        if (!File.Exists(templatePath))
+            throw new FileNotFoundException($"No se encontró la plantilla Word en: {templatePath}");
+
         var templateBytes = await File.ReadAllBytesAsync(templatePath);
 
         using var ms = new MemoryStream();
-        
+
         using (var doc = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document))
         {
             var mainPart = doc.AddMainDocumentPart();
             mainPart.Document = new Document(new Body());
             var body = mainPart.Document.Body;
 
-            // Add styles from template
             AddStylesFromTemplate(mainPart, templateBytes);
-
-            // Add header from template
             CopyHeaderFromTemplate(mainPart, templateBytes);
 
-            // Section properties with header reference
-            var sectPr = new SectionProperties(
-                new HeaderReference() { Type = HeaderFooterValues.Default, Id = "rId6" },
-                new PageSize() { Width = 12240, Height = 15840 },
-                new PageMargin() { Top = 1417, Right = 1701, Bottom = 1417, Left = 1701, Header = 708, Footer = 708, Gutter = 0 },
-                new Columns() { Space = new StringValue("708") },
-                new DocGrid() { LinePitch = 360 }
-            );
-            body.Append(sectPr);
-
-            var docBody = mainPart.Document.Body;
-
+            // Se construye el cuerpo del documento iterando aquí dentro
             bool first = true;
-            
             foreach (var reemplazos in listaReemplazos)
             {
                 if (!first)
                 {
-                    docBody.Append(new Paragraph(new Run(new Break() { Type = BreakValues.Page })));
+                    body.Append(new Paragraph(new Run(new Break() { Type = BreakValues.Page })));
                 }
                 first = false;
 
-                BuildStudentContent(docBody, reemplazos);
+                BuildStudentContent(body, reemplazos);
             }
-            
-            docBody.Append(new SectionProperties(
+
+            // Se agrega la sección al final
+            body.Append(new SectionProperties(
                 new HeaderReference() { Type = HeaderFooterValues.Default, Id = "rId6" },
                 new PageSize() { Width = 12240, Height = 15840 },
                 new PageMargin() { Top = 1417, Right = 1701, Bottom = 1417, Left = 1701, Header = 708, Footer = 708, Gutter = 0 },
@@ -318,8 +311,7 @@ public class DocumentoService
         if (templateHeaderPart != null)
         {
             var headerPart = mainPart.AddNewPart<HeaderPart>("rId6");
-            
-            // Copy all related parts (images, etc.) from template header to new header
+
             foreach (var part in templateHeaderPart.Parts)
             {
                 var openXmlPart = part.OpenXmlPart;
@@ -332,41 +324,11 @@ public class DocumentoService
                     }
                 }
             }
-            
-            // Copy the header XML content
+
             headerPart.FeedData(templateHeaderPart.GetStream());
         }
     }
 
-    private void ReplaceInDocument(MainDocumentPart mainPart, Dictionary<string, string> reemplazos)
-    {
-        // Get the document XML as string
-        string docXml;
-        using (var reader = new StreamReader(mainPart.GetStream()))
-        {
-            docXml = reader.ReadToEnd();
-        }
-
-        // Do all replacements on the full XML
-        foreach (var kvp in reemplazos)
-        {
-            var placeholder = "{{" + kvp.Key + "}}";
-            var placeholderWithSpaces = "{{ " + kvp.Key + " }}";
-            var placeholderWithExtraSpaces = "{{  " + kvp.Key + "  }}";
-
-            docXml = docXml.Replace(placeholder, kvp.Value ?? "");
-            docXml = docXml.Replace(placeholderWithSpaces, kvp.Value ?? "");
-            docXml = docXml.Replace(placeholderWithExtraSpaces, kvp.Value ?? "");
-        }
-
-        // Write the modified XML back
-        using (var writer = new StreamWriter(mainPart.GetStream(FileMode.Create)))
-        {
-            writer.Write(docXml);
-        }
-    }
-
-    // Helper para crear runs con formato
     private Run CreateRun(string text, bool bold = false, bool noProof = false, string fontSize = "30", string fontFamily = "Times New Roman")
     {
         var run = new Run();
@@ -383,7 +345,6 @@ public class DocumentoService
 
     private void BuildStudentContent(Body body, Dictionary<string, string> r)
     {
-        // Paragraph 1
         body.Append(new Paragraph(
             new ParagraphProperties(
                 new SpacingBetweenLines() { Line = "360", LineRule = LineSpacingRuleValues.Auto },
@@ -394,7 +355,6 @@ public class DocumentoService
             CreateRun(", ")
         ));
 
-        // Paragraph 2
         body.Append(new Paragraph(
             new ParagraphProperties(
                 new SpacingBetweenLines() { Line = "360", LineRule = LineSpacingRuleValues.Auto },
@@ -411,7 +371,6 @@ public class DocumentoService
             CreateRun(", obteniendo  ")
         ));
 
-        // Paragraph 3: Conducta
         body.Append(new Paragraph(
             new ParagraphProperties(
                 new SpacingBetweenLines() { Line = "360", LineRule = LineSpacingRuleValues.Auto },
@@ -422,12 +381,10 @@ public class DocumentoService
             CreateRun("” conducta. Se iniciará el proceso de trámite de legalización de título en el Ministerio de Educación.")
         ));
 
-        // Empty paragraph
         body.Append(new Paragraph(
             CreateRun("  ")
         ));
 
-        // Closing paragraph
         body.Append(new Paragraph(
             CreateRun("Y, para los usos que el interesado estime conveniente se extiende la presente en la Ciudad de Apopa a los "),
             CreateRun(r.GetValueOrDefault("dia", ""), noProof: true),
@@ -438,12 +395,10 @@ public class DocumentoService
             CreateRun(".")
         ));
 
-        // Empty paragraph for signature space
         body.Append(new Paragraph(
             CreateRun("  ")
         ));
 
-        // Signature - name
         body.Append(new Paragraph(
             new ParagraphProperties(
                 new Justification() { Val = JustificationValues.Center },
@@ -452,7 +407,6 @@ public class DocumentoService
             CreateRun(r.GetValueOrDefault("nombreDirectora", ""))
         ));
 
-        // Signature - title
         body.Append(new Paragraph(
             new ParagraphProperties(
                 new Justification() { Val = JustificationValues.Center },
@@ -467,13 +421,26 @@ public class DocumentoService
     }
 
     // -------------------------------------------------------
-    // NUEVO: Generar PDF combinado (múltiples estudiantes, salto de página por cada uno)
+    // CORREGIDO: Generar PDF combinado (con validación de plantilla)
     // -------------------------------------------------------
     public async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarPdfCombinadoTituloProcesoAsync(
         List<Dictionary<string, string>> listaReemplazos, int idClase)
     {
         var templatePath = Path.Combine(_env.ContentRootPath, "Plantillas", "HTML", "PlantillaHTMLConstanciaTituloEnProceso.html");
+
+        if (!File.Exists(templatePath))
+            throw new FileNotFoundException($"No se encontró la plantilla HTML en: {templatePath}");
+
         var htmlTemplate = await File.ReadAllTextAsync(templatePath);
+
+        var logoPath = Path.Combine(_env.WebRootPath, "images", "logo-ina.png");
+        string logoDataUri = "";
+        if (File.Exists(logoPath))
+        {
+            var logoBytes = await File.ReadAllBytesAsync(logoPath);
+            var base64 = Convert.ToBase64String(logoBytes);
+            logoDataUri = $"data:image/png;base64,{base64}";
+        }
 
         var allHtml = "";
         foreach (var reemplazos in listaReemplazos)
@@ -485,7 +452,7 @@ public class DocumentoService
             }
             if (!reemplazos.ContainsKey("logoUrl"))
             {
-                html = html.Replace("{{logoUrl}}", "/images/logo-ina.png");
+                html = html.Replace("{{logoUrl}}", logoDataUri != "" ? logoDataUri : "/images/logo-ina.png");
             }
             allHtml += html + "<div style='page-break-after: always;'></div>";
         }

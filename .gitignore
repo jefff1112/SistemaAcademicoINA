@@ -37,3 +37,4 @@ obj/
 # ============================================================
 playwright-report/
 test-results/
+/backend/SistemaAcademicoINA/env.mp3

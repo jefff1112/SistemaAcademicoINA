@@ -20,11 +20,16 @@ public class ConstanciasController : ControllerBase
 {
     private readonly ApplicationDbContext _context;
     private readonly DocumentoService _documentoService;
+    private readonly ILogger<ConstanciasController> _logger;
 
-    public ConstanciasController(ApplicationDbContext context, DocumentoService documentoService)
+    public ConstanciasController(
+        ApplicationDbContext context,
+        DocumentoService documentoService,
+        ILogger<ConstanciasController> logger)
     {
         _context = context;
         _documentoService = documentoService;
+        _logger = logger;
     }
 
     // GET: devuelve los datos del estudiante para emitir una constancia de estudio.
@@ -138,8 +143,9 @@ public class ConstanciasController : ControllerBase
 
             return Ok(result);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Error al obtener constancias");
             return StatusCode(500, new { mensaje = "Error al obtener constancias" });
         }
     }
@@ -195,6 +201,7 @@ public class ConstanciasController : ControllerBase
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error al emitir constancia");
             return StatusCode(500, new { mensaje = "Error al emitir constancia", error = ex.Message });
         }
     }
@@ -215,13 +222,10 @@ public class ConstanciasController : ControllerBase
                 return BadRequest(new { mensaje = "Tipo de constancia inválido" });
 
             var permisoAnterior = constancia.PermisoAsistencias;
-            var inicioAnterior = constancia.FechaInicio;
-            var finAnterior = constancia.FechaFin;
 
             constancia.Tipo = tipo;
             constancia.Motivo = request.Motivo;
 
-            // Si el permiso automático ya estaba aplicado con otras fechas, se revierte y se reaplica.
             if (permisoAnterior != constancia.PermisoAsistencias)
             {
                 constancia.PermisoAsistencias = permisoAnterior;
@@ -236,6 +240,7 @@ public class ConstanciasController : ControllerBase
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error al actualizar constancia");
             return StatusCode(500, new { mensaje = "Error al actualizar constancia", error = ex.Message });
         }
     }
@@ -254,7 +259,6 @@ public class ConstanciasController : ControllerBase
             constancia.Estado = "Anulada";
             await _context.SaveChangesAsync();
 
-            // Revierte el permiso automático de asistencias
             if (constancia.PermisoAsistencias)
                 await RevertirPermisoAsistenciasAsync(constancia);
 
@@ -262,6 +266,7 @@ public class ConstanciasController : ControllerBase
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error al anular constancia");
             return StatusCode(500, new { mensaje = "Error al anular constancia", error = ex.Message });
         }
     }
@@ -291,7 +296,6 @@ public class ConstanciasController : ControllerBase
     {
         try
         {
-            // Validar formato (case-insensitive)
             if (!Enum.TryParse(formato, true, out FormatoDocumento fmt))
                 return BadRequest(new { mensaje = "Formato no válido. Use: pdf, word o excel" });
 
@@ -307,7 +311,6 @@ public class ConstanciasController : ControllerBase
             if (estudiante == null)
                 return NotFound(new { mensaje = "Estudiante no encontrado" });
 
-            // Datos del estudiante para la plantilla
             var nombreCompleto = $"{estudiante.Nombres} {estudiante.Apellidos}".Trim();
             var codigoEstudiante = estudiante.CodigoEstudiante ?? "-";
             var nombreNivel = estudiante.Clase?.Nivel?.NombreNivel ?? "Técnico";
@@ -316,21 +319,17 @@ public class ConstanciasController : ControllerBase
             var nombreClase = estudiante.Clase?.NombreClase ?? "Sin Clase";
             var especialidad = estudiante.Clase?.Especialidad?.NombreEspecialidad ?? "Bachillerato General";
 
-            // Convertir año a número romano para el nivel de bachillerato (PRIMER, SEGUNDO, TERCER, etc.)
-            // SOLO el número romano (PRIMER, SEGUNDO, TERCER, etc.) - la plantilla ya tiene "BACHILLERATO TÉCNICO VOCACIONAL EN {{especialidad}}"
-            var anioNumero = duracionAnios;
-            var nivelBachillerato = anioNumero switch
+            var nivelBachillerato = duracionAnios switch
             {
                 1 => "PRIMER",
                 2 => "SEGUNDO",
                 3 => "TERCER",
                 4 => "CUARTO",
                 5 => "QUINTO",
-                _ => anioNumero.ToString()
+                _ => duracionAnios.ToString()
             };
 
-            // Datos adicionales para constancia de conducta (puedes personalizar según tipo)
-            string conducta = "Aprobado"; // valor por defecto
+            string conducta = "Aprobado";
             string tipoParam = Request.Query["tipo"].ToString();
             string tipo = NormalizarTipo(!string.IsNullOrEmpty(tipoParam) ? tipoParam : "Estudio") ?? "Estudio";
 
@@ -343,19 +342,17 @@ public class ConstanciasController : ControllerBase
                 conducta = faltas.Count > 0 ? "Observadas" : "Aprobado";
             }
 
-            // Obtener nombre de la directora desde la BD (usuario con rol Director/Directora)
             var directora = await _context.Usuarios
                 .Include(u => u.Rol)
                 .Where(u => u.Rol != null && (u.Rol.NombreRol == "Director" || u.Rol.NombreRol == "Directora"))
                 .Select(u => u.Nombres + " " + u.Apellidos)
                 .FirstOrDefaultAsync() ?? "Directora";
 
-            // 1. Construir los datos dinámicos según el formato (keys deben coincidir con plantillas)
             var reemplazos = new Dictionary<string, string>
             {
                 { "nombreEstudiante", nombreCompleto },
                 { "codigoEstudiante", codigoEstudiante },
-                { "nivelBachillerato", nivelBachillerato },  // Nivel: "TERCER Técnico", "PRIMER Técnico", etc.
+                { "nivelBachillerato", nivelBachillerato },
                 { "especialidad", especialidad },
                 { "seccion", seccion },
                 { "anioEmision", DateTime.Now.Year.ToString() },
@@ -366,12 +363,12 @@ public class ConstanciasController : ControllerBase
                 { "nombreDirectora", directora }
             };
 
-            // 2. Generar el documento usando el servicio
+            // CORREGIDO: Se envían los parámetros en el orden correcto y con los nombres correctos
             var (contenido, nombreArchivo, mimeType) = await _documentoService.GenerarDocumentoAsync(
                 fmt,
                 nombreCompleto,
                 directora,
-                nombreClase,
+                nivelBachillerato, // <-- Antes se enviaba nombreClase, ahora es nivelBachillerato
                 especialidad,
                 seccion,
                 DateTime.Now.Year.ToString(),
@@ -382,11 +379,11 @@ public class ConstanciasController : ControllerBase
                 codigoEstudiante
             );
 
-            // 3. Retornar el archivo para descarga automática
             return File(contenido, mimeType, nombreArchivo);
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error al generar la constancia para el estudiante {Id}", idEstudiante);
             return StatusCode(500, new { mensaje = "Error al generar la constancia: " + ex.Message });
         }
     }
@@ -402,6 +399,15 @@ public class ConstanciasController : ControllerBase
             if (!Enum.TryParse(formato, true, out FormatoDocumento fmt))
                 return BadRequest(new { mensaje = "Formato no válido. Use: pdf o word" });
 
+            // CORREGIDO: Buscar estudiantes a través de Inscripciones confirmadas
+            var estudiantesIds = await _context.Inscripciones
+                .Where(i => i.IdClase == idClase && i.EstadoInscripcion == "Confirmada")
+                .Select(i => i.IdEstudiante)
+                .ToListAsync();
+
+            if (!estudiantesIds.Any())
+                return NotFound(new { mensaje = "No hay estudiantes matriculados en esta clase" });
+
             var estudiantes = await _context.Estudiantes
                 .Include(e => e.Clase)
                     .ThenInclude(c => c!.Nivel)
@@ -409,13 +415,14 @@ public class ConstanciasController : ControllerBase
                     .ThenInclude(c => c!.SeccionObj)
                 .Include(e => e.Clase)
                     .ThenInclude(c => c!.Especialidad)
-                .Where(e => e.IdClase == idClase && e.Estado)
+                .Where(e => estudiantesIds.Contains(e.IdEstudiante) && e.Estado)
+                .OrderBy(e => e.Apellidos)
+                .ThenBy(e => e.Nombres)
                 .ToListAsync();
 
             if (!estudiantes.Any())
                 return NotFound(new { mensaje = "No hay estudiantes activos en esta clase" });
 
-            // Info común de la clase
             var clase = estudiantes.First().Clase;
             var especialidad = clase?.Especialidad?.NombreEspecialidad ?? "Bachillerato General";
             var seccion = clase?.SeccionObj?.NombreSeccion ?? "-";
@@ -423,7 +430,6 @@ public class ConstanciasController : ControllerBase
             var duracionAniosClase = clase?.Nivel?.DuracionAnios ?? 3;
             var anio = DateTime.Now.Year.ToString();
 
-            // Nombre de la directora
             var directora = await _context.Usuarios
                 .Include(u => u.Rol)
                 .Where(u => u.Rol != null && (u.Rol.NombreRol == "Director" || u.Rol.NombreRol == "Directora"))
@@ -476,6 +482,7 @@ public class ConstanciasController : ControllerBase
         }
         catch (Exception ex)
         {
+            _logger.LogError(ex, "Error al generar Título en Proceso por clase {IdClase}", idClase);
             return StatusCode(500, new { mensaje = "Error al generar Título en Proceso por clase: " + ex.Message });
         }
     }
@@ -528,7 +535,10 @@ public class ConstanciasController : ControllerBase
 
             // Lógica de permisos - placeholder
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al aplicar permiso de asistencias para constancia {Id}", constancia.IdConstancia);
+        }
     }
 
     private async Task RevertirPermisoAsistenciasAsync(Constancia constancia)
@@ -537,6 +547,9 @@ public class ConstanciasController : ControllerBase
         {
             // Lógica de reversión - placeholder
         }
-        catch { }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al revertir permiso de asistencias para constancia {Id}", constancia.IdConstancia);
+        }
     }
 }
