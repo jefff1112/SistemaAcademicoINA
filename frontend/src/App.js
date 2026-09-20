@@ -38,6 +38,9 @@ import GestionTituloEnProceso from './components/Shared/GestionTituloEnProceso';
 import GestionModulosEspecialidad from './components/Shared/GestionModulosEspecialidad';
 import AsignarModulosDocentes from './components/Shared/AsignarModulosDocentes';
 
+// ✅ NUEVO: Gestión de Contenido Público
+import GestionContenidoPublico from './components/Shared/GestionContenidoPublico';
+
 // Direccion (consulta + exportaciones)
 import ActividadesConsultaDireccion from './components/Direccion/ActividadesConsulta';
 import CuadroAuxiliarConsultaDireccion from './components/Direccion/CuadroAuxiliarConsulta';
@@ -104,6 +107,7 @@ import GestionNotasDocente from './components/Docente/GestionNotasDocente';
 import ResultadosPeriodos from './components/Docente/ResultadosPeriodos';
 import CuadroAuxiliarDocente from './components/Docente/CuadroAuxiliarDigital';
 import ActivityManagerDocente from './components/Docente/ActivityManager';
+import GestionConductaDocente from './components/Docente/GestionConductaDocente';
 
 // Estudiante
 import DashboardEstudiante from './components/Estudiante/DashboardEstudiante';
@@ -160,6 +164,8 @@ function App() {
                     <Route path="/admin/secciones" element={<PrivateRoute><GestionSeccionesAdmin /></PrivateRoute>} />
                     <Route path="/admin/periodos" element={<PrivateRoute><GestionPeriodosAdmin /></PrivateRoute>} />
                     <Route path="/admin/horarios/generar" element={<PrivateRoute><GenerarHorarios /></PrivateRoute>} />
+                    {/* ✅ NUEVO: Contenido público para Admin */}
+                    <Route path="/admin/contenido-publico" element={<PrivateRoute><GestionContenidoPublico /></PrivateRoute>} />
 
                     {/* DIRECCION */}
                     <Route path="/direccion/gestion-aspirantes" element={<PrivateRoute><GestionAspirantesDireccion /></PrivateRoute>} />
@@ -168,7 +174,7 @@ function App() {
                     <Route path="/direccion/clases" element={<PrivateRoute><GestionClases /></PrivateRoute>} />
                     <Route path="/direccion/materias" element={<PrivateRoute><GestionMateriasDireccion /></PrivateRoute>} />
                     <Route path="/direccion/cuadro-auxiliar" element={<PrivateRoute><CuadroAuxiliarDireccion /></PrivateRoute>} />
-                    
+
                     <Route path="/direccion/asistencias" element={<PrivateRoute><GestionAsistenciasDireccion /></PrivateRoute>} />
                     <Route path="/direccion/conducta" element={<PrivateRoute><GestionConductaDireccion /></PrivateRoute>} />
                     <Route path="/direccion/periodos" element={<PrivateRoute><GestionPeriodosDireccion /></PrivateRoute>} />
@@ -179,7 +185,9 @@ function App() {
                     <Route path="/direccion/avisos" element={<PrivateRoute><AvisosDireccion /></PrivateRoute>} />
                     <Route path="/direccion/entrevistas" element={<PrivateRoute><GestionEntrevistas /></PrivateRoute>} />
                     <Route path="/direccion/constancias" element={<PrivateRoute><GestionConstanciasDireccion /></PrivateRoute>} />
-                    
+                    {/* ✅ NUEVO: Contenido público para Dirección */}
+                    <Route path="/direccion/contenido-publico" element={<PrivateRoute><GestionContenidoPublico /></PrivateRoute>} />
+
                     <Route path="/direccion/actividades" element={<PrivateRoute><ActividadesConsultaDireccion /></PrivateRoute>} />
                     <Route path="/direccion/cuadro-notas-consulta" element={<PrivateRoute><CuadroAuxiliarConsultaDireccion /></PrivateRoute>} />
                     <Route path="/direccion/exportaciones" element={<PrivateRoute><ExportacionesExcelDireccion /></PrivateRoute>} />
@@ -221,10 +229,10 @@ function App() {
                     <Route path="/docente/actividades" element={<PrivateRoute><ActividadesDocente /></PrivateRoute>} />
                     <Route path="/docente/avisos" element={<PrivateRoute><AvisosDocente /></PrivateRoute>} />
                     <Route path="/docente/perfil" element={<PrivateRoute><PerfilDocente /></PrivateRoute>} />
-                    {/* ✅ SOLO UNA VEZ */}
                     <Route path="/docente/gestion-notas" element={<PrivateRoute><GestionNotasDocente /></PrivateRoute>} />
                     <Route path="/docente/resultados-periodo" element={<PrivateRoute><ResultadosPeriodos /></PrivateRoute>} />
                     <Route path="/docente/actividades-gestion" element={<PrivateRoute><ActivityManagerDocente /></PrivateRoute>} />
+                    <Route path="/docente/conducta" element={<GestionConductaDocente />} />
 
                     {/* ESTUDIANTE */}
                     <Route path="/estudiante/dashboard" element={<PrivateRoute><DashboardEstudiante /></PrivateRoute>} />
@@ -239,12 +247,12 @@ function App() {
                     <Route path="/estudiante/perfil" element={<PrivateRoute><PerfilEstudiante /></PrivateRoute>} />
                     <Route path="/estudiante/boleta-notas" element={<PrivateRoute><BoletaNotasEstudianteEstudiante titulo="Mi Boleta de Notas" /></PrivateRoute>} />
 
-                    {/* CONSTANCIAS (personal: direccion, sub director, registro y admin) */}
+                    {/* CONSTANCIAS */}
                     <Route path="/direccion/constancias" element={<PrivateRoute><GestionConstanciasDireccion /></PrivateRoute>} />
                     <Route path="/admin/constancias" element={<PrivateRoute><GestionConstanciasAdmin /></PrivateRoute>} />
                     <Route path="/registro/constancias" element={<PrivateRoute><GestionConstanciasRegistro /></PrivateRoute>} />
 
-                    {/* TÍTULO EN PROCESO (nueva sección dedicada) */}
+                    {/* TÍTULO EN PROCESO */}
                     <Route path="/titulo-en-proceso" element={<PrivateRoute><GestionTituloEnProceso /></PrivateRoute>} />
                     <Route path="/modulos-especialidad" element={<PrivateRoute><GestionModulosEspecialidad /></PrivateRoute>} />
                     <Route path="/asignar-modulos" element={<PrivateRoute><AsignarModulosDocentes /></PrivateRoute>} />

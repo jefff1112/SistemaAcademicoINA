@@ -1,6 +1,7 @@
 // Punto de entrada de la API: configura servicios, CORS, autenticación JWT y el pipeline de middleware.
 // Program.cs
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
@@ -13,7 +14,9 @@ using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Base de datos
+// ============================================================
+// 1. BASE DE DATOS
+// ============================================================
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseMySql(
         builder.Configuration.GetConnectionString("DefaultConnection"),
@@ -21,30 +24,56 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
     )
 );
 
-// 2. JwtHelper
+// ============================================================
+// 2. HELPERS Y SERVICIOS DE NEGOCIO
+// ============================================================
 builder.Services.AddScoped<JwtHelper>();
-
-// 2b. IPlaywright (para generación de PDF desde HTML)
-builder.Services.AddSingleton<IPlaywright>(_ => Playwright.CreateAsync().GetAwaiter().GetResult());
-
-// 2b. DocumentoService (generación PDF, Word, Excel)
-builder.Services.AddScoped<DocumentoService>();
-
-// 2b. AuditoriaHelper (registro centralizado de eventos de auditoría)
 builder.Services.AddScoped<AuditoriaHelper>();
-
-// 2b. HttpContextAccessor (usado por AuditoriaController)
 builder.Services.AddHttpContextAccessor();
 
-// 2c. Correo electrónico (MailKit + cola en background)
+// ============================================================
+// 3. PLAYWRIGHT + DOCUMENTO SERVICE
+// ============================================================
+// IPlaywright como Singleton perezoso (lazy). Se inicializa la primera vez que se usa.
+// Esto evita que la app falle al arrancar si Playwright no tiene navegadores instalados.
+builder.Services.AddSingleton<IPlaywright>(sp =>
+{
+    try
+    {
+        return Playwright.CreateAsync().GetAwaiter().GetResult();
+    }
+    catch (Exception ex)
+    {
+        var logger = sp.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Error al inicializar Playwright. ¿Instalaste los navegadores con 'playwright install'?");
+        throw;
+    }
+});
+
+builder.Services.AddScoped<DocumentoService>();
+
+// ============================================================
+// 4. CORREO ELECTRÓNICO (MailKit + cola en background)
+// ============================================================
 builder.Services.AddSingleton<EmailQueue>();
 builder.Services.AddSingleton<IEmailService, SmtpEmailService>();
 builder.Services.AddHostedService<EmailBackgroundService>();
 builder.Services.AddSingleton<PlantillasCorreoService>();
 builder.Services.AddSingleton<RateLimiterService>();
 
-// 3. AUTENTICACIÓN JWT
-// Configura la autenticación con tokens JWT y la validación de la firma simétrica.
+// ============================================================
+// 5. CONFIGURACIÓN DE SUBIDA DE ARCHIVOS (para constancias)
+// ============================================================
+builder.Services.Configure<FormOptions>(options =>
+{
+    options.ValueLengthLimit = int.MaxValue;
+    options.MultipartBodyLengthLimit = int.MaxValue;
+    options.MemoryBufferThreshold = int.MaxValue;
+});
+
+// ============================================================
+// 6. AUTENTICACIÓN JWT
+// ============================================================
 var jwtKey = builder.Configuration["Jwt:Key"] ?? "TuClaveSecretaSuperSeguraDeAlMenos32Caracteres!";
 var key = Encoding.UTF8.GetBytes(jwtKey);
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "SistemaAcademicoINA";
@@ -69,8 +98,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 builder.Services.AddAuthorization();
 
-// 4. CORS
-// Permite solicitudes desde los orígenes del frontend (desarrollo y producción local).
+// ============================================================
+// 7. CORS (permite el frontend en desarrollo)
+// ============================================================
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
@@ -79,13 +109,17 @@ builder.Services.AddCors(options =>
             policy.WithOrigins(
                     "http://localhost:3000",
                     "http://localhost:3001",
-                    "http://127.0.0.1:3000")
+                    "http://127.0.0.1:3000",
+                    "http://127.0.0.1:3001")
                   .AllowAnyMethod()
-                  .AllowAnyHeader();
+                  .AllowAnyHeader()
+                  .AllowCredentials();  // Necesario si usas cookies o auth basada en credenciales
         });
 });
 
-// 5. Controladores
+// ============================================================
+// 8. CONTROLADORES
+// ============================================================
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -93,8 +127,21 @@ builder.Services.AddControllers()
         options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
     });
 
-// 6. Swagger
-// Documentación interactiva de la API con esquema de seguridad Bearer para JWT.
+// ============================================================
+// 9. LOGS DETALLADOS EN DESARROLLO (para ver rutas registradas)
+// ============================================================
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+if (builder.Environment.IsDevelopment())
+{
+    builder.Logging.SetMinimumLevel(LogLevel.Debug);
+    builder.Logging.AddFilter("Microsoft.AspNetCore.Routing", LogLevel.Debug);
+    builder.Logging.AddFilter("Microsoft.AspNetCore.Mvc", LogLevel.Debug);
+}
+
+// ============================================================
+// 10. SWAGGER
+// ============================================================
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -123,26 +170,48 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
+// ============================================================
+// CONSTRUCCIÓN DE LA APP
+// ============================================================
 var app = builder.Build();
 
-// Pipeline de middleware: Swagger solo en desarrollo, manejo global de errores, CORS, autenticación y autorización.
+// ============================================================
+// PIPELINE DE MIDDLEWARE
+// ============================================================
+
+// Manejo global de errores (debe ir primero)
 app.UseMiddleware<ErrorHandlingMiddleware>();
 
+// Swagger solo en desarrollo
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
     app.UseSwaggerUI();
 }
 
+// CORS
 app.UseCors("AllowFrontend");
 
-// Sirve los archivos subidos (documentos de constancias, fotos de aspirantes, etc.).
+// Archivos estáticos (documentos, imágenes, PDFs generados)
 app.UseStaticFiles();
 
-// ✅ ORDEN CORRECTO: Authentication ANTES de Authorization
+// Autenticación ANTES de Autorización
 app.UseAuthentication();
 app.UseAuthorization();
 
+// Mapeo de controladores
 app.MapControllers();
+
+// ============================================================
+// LOG DE RUTAS REGISTRADAS (útil para detectar problemas)
+// ============================================================
+if (app.Environment.IsDevelopment())
+{
+    var logger = app.Services.GetRequiredService<ILogger<Program>>();
+    logger.LogInformation("========================================");
+    logger.LogInformation("API iniciada en: {Urls}", string.Join(", ", app.Urls));
+    logger.LogInformation("Entorno: {Environment}", app.Environment.EnvironmentName);
+    logger.LogInformation("========================================");
+}
 
 app.Run();

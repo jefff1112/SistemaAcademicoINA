@@ -1,28 +1,27 @@
-// Componente Certificados de Promoción (Registro Académico): genera e imprime el certificado de promoción de un estudiante.
 import React, { useState, useEffect } from 'react';
 import DashboardLayout from '../Layout/DashboardLayout';
 import API from '../../services/api';
 
 const CertificadosRegistro = () => {
-    // Estado de catálogos, filtros (año, sección, NIE) y datos del certificado generado.
     const [estudiantes, setEstudiantes] = useState([]);
     const [clases, setClases] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [modo, setModo] = useState('estudiante'); // 'estudiante' o 'clase'
     const [filtroAnio, setFiltroAnio] = useState('');
     const [filtroClase, setFiltroClase] = useState('');
-    const [filtroSeccion, setFiltroSeccion] = useState('');
-    const [busqueda, setBusqueda] = useState('');
     const [selectedEstudiante, setSelectedEstudiante] = useState('');
+    const [formato, setFormato] = useState('pdf');
+    const [busqueda, setBusqueda] = useState('');
     const [certificadoData, setCertificadoData] = useState(null);
+    const [certificadosClase, setCertificadosClase] = useState([]);
     const [message, setMessage] = useState('');
     const [messageType, setMessageType] = useState('');
+    const [generando, setGenerando] = useState(false);
 
-    // Carga estudiantes y clases al montar el componente.
     useEffect(() => {
         cargarDatos();
     }, []);
 
-    // Obtiene los estudiantes y las clases desde la API.
     const cargarDatos = async () => {
         try {
             const [estudiantesRes, clasesRes] = await Promise.all([
@@ -43,26 +42,27 @@ const CertificadosRegistro = () => {
         }
     };
 
-    // Muestra un mensaje temporal de éxito o error.
     const mostrarMensaje = (texto, tipo) => {
         setMessage(texto);
         setMessageType(tipo);
         setTimeout(() => setMessage(''), 4000);
     };
 
-    // Año lectivo efectivo según el filtro seleccionado.
-    const anioLectivo = parseInt(filtroAnio) || new Date().getFullYear();
+    const cambiarModo = (nuevoModo) => {
+        setModo(nuevoModo);
+        setSelectedEstudiante('');
+        setCertificadoData(null);
+        setCertificadosClase([]);
+        setBusqueda('');
+    };
 
-    // Listas derivadas de los filtros: años, clases del año y estudiantes resultantes.
+    const anioLectivo = parseInt(filtroAnio) || new Date().getFullYear();
     const aniosDisponibles = [...new Set(clases.map(c => c.anioLectivo))].sort((a, b) => b - a);
     const clasesAnio = clases.filter(c => c.anioLectivo === anioLectivo);
     const claseSeleccionada = clasesAnio.find(c => c.idClase === parseInt(filtroClase)) || null;
-    const seccionesDisponibles = [...new Set(clasesAnio.map(c => c.seccion).filter(Boolean))].sort();
-    // Si hay clase elegida, la sección se toma automáticamente de ella; si no, se filtra por la sección manual.
-    const clasesFiltradas = claseSeleccionada
-        ? [claseSeleccionada]
-        : clasesAnio.filter(c => !filtroSeccion || c.seccion === filtroSeccion);
-    const idsClasesFiltradas = new Set(clasesFiltradas.map(c => c.idClase));
+
+    // Estudiantes filtrados por clase y búsqueda
+    const idsClasesFiltradas = new Set(claseSeleccionada ? [claseSeleccionada.idClase] : clasesAnio.map(c => c.idClase));
     const termino = busqueda.trim().toLowerCase();
     const estudiantesFiltrados = estudiantes.filter(e =>
         idsClasesFiltradas.has(e.idClase) &&
@@ -71,47 +71,96 @@ const CertificadosRegistro = () => {
             `${e.nombres} ${e.apellidos}`.toLowerCase().includes(termino))
     );
 
-    // Consulta las notas del estudiante y calcula promoción, promedio y materias aprobadas/reprobadas.
-    const generarCertificado = async () => {
+    // Generar certificado individual (vista previa)
+    const generarCertificadoIndividual = async () => {
         if (!selectedEstudiante) {
             mostrarMensaje('Seleccione un estudiante', 'error');
             return;
         }
 
         try {
-            const response = await API.get(`/reportes/notas-estudiante/${selectedEstudiante}/${anioLectivo}`);
-            const data = response.data || {};
-            const notas = data.notas || [];
-            const aprobadas = notas.filter(n => n.estadoMateria === 'Aprobado').length;
-            const reprobadas = notas.filter(n => n.estadoMateria === 'Reprobado').length;
-            const promedio = notas.length > 0 ? notas.reduce((s, n) => s + n.notaFinal, 0) / notas.length : 0;
-
-            setCertificadoData({
-                estudiante: data.estudiante || getEstudianteNombre(selectedEstudiante),
-                codigo: data.codigo || getEstudianteCodigo(selectedEstudiante),
-                anioLectivo: anioLectivo,
-                promedio: promedio.toFixed(2),
-                aprobadas,
-                reprobadas,
-                estado: promedio >= 6 ? 'PROMOVIDO' : 'NO PROMOVIDO',
-                fecha: new Date().toLocaleDateString()
-            });
+            const response = await API.get(`/certificados-promocion/estudiante/${selectedEstudiante}/${anioLectivo}`);
+            setCertificadoData(response.data);
+            setCertificadosClase([]);
             mostrarMensaje('Certificado generado correctamente', 'success');
         } catch (error) {
-            mostrarMensaje('Error al generar certificado', 'error');
+            mostrarMensaje(error.response?.data?.mensaje || 'Error al generar certificado', 'error');
         }
     };
 
-    // Devuelve el nombre completo del estudiante desde la lista local.
-    const getEstudianteNombre = (id) => {
-        const estudiante = estudiantes.find(e => e.idEstudiante === parseInt(id));
-        return estudiante ? `${estudiante.nombres} ${estudiante.apellidos}` : '-';
+    // Cargar certificados de toda la clase (vista previa)
+    const cargarCertificadosClase = async () => {
+        if (!filtroClase) {
+            mostrarMensaje('Seleccione una clase', 'error');
+            return;
+        }
+
+        try {
+            const response = await API.get(`/certificados-promocion/clase/${filtroClase}/${anioLectivo}`);
+            setCertificadosClase(response.data);
+            setCertificadoData(null);
+            mostrarMensaje(`${response.data.length} certificados cargados`, 'success');
+        } catch (error) {
+            mostrarMensaje(error.response?.data?.mensaje || 'Error al cargar certificados', 'error');
+        }
     };
 
-    // Devuelve el código del estudiante desde la lista local.
-    const getEstudianteCodigo = (id) => {
-        const estudiante = estudiantes.find(e => e.idEstudiante === parseInt(id));
-        return estudiante ? estudiante.codigoEstudiante : '-';
+    // Descargar PDF/Word
+    const descargarDocumento = async () => {
+        setGenerando(true);
+        try {
+            let url = '';
+            let nombreArchivo = '';
+
+            if (modo === 'estudiante') {
+                if (!selectedEstudiante) {
+                    mostrarMensaje('Seleccione un estudiante', 'error');
+                    setGenerando(false);
+                    return;
+                }
+                url = `/certificados-promocion/generar/estudiante/${selectedEstudiante}/${anioLectivo}/${formato}`;
+                nombreArchivo = `certificado_promocion_${selectedEstudiante}.${formato === 'pdf' ? 'pdf' : 'docx'}`;
+            } else {
+                if (!filtroClase) {
+                    mostrarMensaje('Seleccione una clase', 'error');
+                    setGenerando(false);
+                    return;
+                }
+                url = `/certificados-promocion/generar/clase/${filtroClase}/${anioLectivo}/${formato}`;
+                nombreArchivo = `certificados_promocion_clase_${filtroClase}.${formato === 'pdf' ? 'pdf' : 'docx'}`;
+            }
+
+            const response = await API.get(url, { responseType: 'blob' });
+
+            const blob = new Blob([response.data], { type: response.headers['content-type'] });
+            const link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = nombreArchivo;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(link.href);
+
+            mostrarMensaje('Documento descargado exitosamente', 'success');
+        } catch (error) {
+            // Manejar error que viene como blob
+            if (error.response?.data instanceof Blob) {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    try {
+                        const errorData = JSON.parse(reader.result);
+                        mostrarMensaje(errorData.mensaje || 'Error al generar documento', 'error');
+                    } catch (e) {
+                        mostrarMensaje('Error al generar documento', 'error');
+                    }
+                };
+                reader.readAsText(error.response.data);
+            } else {
+                mostrarMensaje(error.response?.data?.mensaje || 'Error al generar documento', 'error');
+            }
+        } finally {
+            setGenerando(false);
+        }
     };
 
     if (loading) {
@@ -123,7 +172,7 @@ const CertificadosRegistro = () => {
     }
 
     return (
-        <DashboardLayout title="Certificados de Promocion - Registro Academico">
+        <DashboardLayout title="Certificados de Promoción - Registro Académico">
             {message && (
                 <div style={{
                     padding: '0.75rem',
@@ -137,7 +186,31 @@ const CertificadosRegistro = () => {
             )}
 
             <div className="card">
-                <h3>Generar Certificado de Promocion</h3>
+                <h3>Generar Certificado de Promoción</h3>
+
+                {/* Radio buttons para seleccionar modo */}
+                <div style={{ display: 'flex', gap: '20px', marginBottom: '16px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                            type="radio"
+                            name="modoCertificado"
+                            value="estudiante"
+                            checked={modo === 'estudiante'}
+                            onChange={() => cambiarModo('estudiante')}
+                        />
+                        Por Estudiante
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+                        <input
+                            type="radio"
+                            name="modoCertificado"
+                            value="clase"
+                            checked={modo === 'clase'}
+                            onChange={() => cambiarModo('clase')}
+                        />
+                        Por Clase
+                    </label>
+                </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px', marginBottom: '12px' }}>
                     <div className="form-group">
@@ -147,33 +220,33 @@ const CertificadosRegistro = () => {
                             onChange={(e) => {
                                 setFiltroAnio(e.target.value);
                                 setFiltroClase('');
-                                setFiltroSeccion('');
                                 setSelectedEstudiante('');
                                 setCertificadoData(null);
+                                setCertificadosClase([]);
                             }}
                             className="form-control"
                             style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                         >
-                            {aniosDisponibles.length === 0 && <option value={new Date().getFullYear()}>{new Date().getFullYear()}</option>}
                             {aniosDisponibles.map(a => (
                                 <option key={a} value={a}>{a}</option>
                             ))}
                         </select>
                     </div>
+
                     <div className="form-group">
                         <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Clase</label>
                         <select
                             value={filtroClase}
                             onChange={(e) => {
                                 setFiltroClase(e.target.value);
-                                setFiltroSeccion('');
                                 setSelectedEstudiante('');
                                 setCertificadoData(null);
+                                setCertificadosClase([]);
                             }}
                             className="form-control"
                             style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                         >
-                            <option value="">Todas las clases</option>
+                            <option value="">Seleccione una clase</option>
                             {clasesAnio.map(c => (
                                 <option key={c.idClase} value={c.idClase}>
                                     {c.nombreClase} (Sección {c.seccion})
@@ -181,107 +254,149 @@ const CertificadosRegistro = () => {
                             ))}
                         </select>
                     </div>
+
+                    {modo === 'estudiante' && (
+                        <div className="form-group">
+                            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Buscar por NIE</label>
+                            <input
+                                type="text"
+                                placeholder="Digite el NIE..."
+                                value={busqueda}
+                                onChange={(e) => {
+                                    setBusqueda(e.target.value);
+                                    setSelectedEstudiante('');
+                                    setCertificadoData(null);
+                                }}
+                                className="form-control"
+                                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+                            />
+                        </div>
+                    )}
+
                     <div className="form-group">
-                        <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Sección</label>
+                        <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Formato</label>
                         <select
-                            value={claseSeleccionada ? claseSeleccionada.seccion : filtroSeccion}
-                            onChange={(e) => {
-                                if (claseSeleccionada) return;
-                                setFiltroSeccion(e.target.value);
-                                setSelectedEstudiante('');
-                                setCertificadoData(null);
-                            }}
-                            disabled={!!claseSeleccionada}
-                            className="form-control"
-                            style={{
-                                width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px',
-                                opacity: claseSeleccionada ? 0.65 : 1, cursor: claseSeleccionada ? 'not-allowed' : 'default'
-                            }}
-                        >
-                            <option value="">{claseSeleccionada ? 'Según la clase seleccionada' : 'Todas las secciones'}</option>
-                            {seccionesDisponibles.map(s => (
-                                <option key={s} value={s}>Sección {s}</option>
-                            ))}
-                        </select>
-                        {claseSeleccionada && (
-                            <small style={{ display: 'block', marginTop: '4px', color: '#16a34a', fontSize: '12px' }}>
-                                Sección {claseSeleccionada.seccion || '-'} asignada automáticamente por la clase
-                            </small>
-                        )}
-                    </div>
-                    <div className="form-group">
-                        <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Buscar por NIE</label>
-                        <input
-                            type="text"
-                            inputMode="numeric"
-                            placeholder="Digite el NIE..."
-                            value={busqueda}
-                            onChange={(e) => {
-                                setBusqueda(e.target.value);
-                                setSelectedEstudiante('');
-                                setCertificadoData(null);
-                            }}
+                            value={formato}
+                            onChange={(e) => setFormato(e.target.value)}
                             className="form-control"
                             style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                        />
+                        >
+                            <option value="pdf">PDF</option>
+                            <option value="word">Word (.docx)</option>
+                        </select>
                     </div>
                 </div>
 
-                <div className="form-group" style={{ marginBottom: '12px' }}>
-                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Estudiante</label>
-                    <select
-                        value={selectedEstudiante}
-                        onChange={(e) => setSelectedEstudiante(e.target.value)}
-                        className="form-control"
-                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                    >
-                        <option value="">Seleccionar Estudiante</option>
-                        {estudiantesFiltrados.map(e => (
-                            <option key={e.idEstudiante} value={e.idEstudiante}>
-                                {e.nombres} {e.apellidos} - NIE: {e.nie || 'N/A'}
-                            </option>
-                        ))}
-                    </select>
-                    <small style={{ display: 'block', marginTop: '4px', color: '#64748b', fontSize: '12px' }}>
-                        {estudiantesFiltrados.length} estudiante(s) en {clasesFiltradas.length > 0
-                            ? clasesFiltradas.map(c => `${c.nombreClase} (Sección ${c.seccion})`).join(', ')
-                            : 'las clases del año seleccionado'}
-                    </small>
-                </div>
+                {modo === 'estudiante' && (
+                    <div className="form-group" style={{ marginBottom: '12px' }}>
+                        <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Estudiante</label>
+                        <select
+                            value={selectedEstudiante}
+                            onChange={(e) => setSelectedEstudiante(e.target.value)}
+                            className="form-control"
+                            style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+                        >
+                            <option value="">Seleccionar Estudiante</option>
+                            {estudiantesFiltrados.map(e => (
+                                <option key={e.idEstudiante} value={e.idEstudiante}>
+                                    {e.nombres} {e.apellidos} - NIE: {e.nie || 'N/A'}
+                                </option>
+                            ))}
+                        </select>
+                        <small style={{ display: 'block', marginTop: '4px', color: '#64748b', fontSize: '12px' }}>
+                            {estudiantesFiltrados.length} estudiante(s) encontrados
+                        </small>
+                    </div>
+                )}
 
-                <button className="btn-primary" onClick={generarCertificado} style={{ padding: '8px 24px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-                    Generar Certificado
-                </button>
+                <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <button
+                        onClick={modo === 'estudiante' ? generarCertificadoIndividual : cargarCertificadosClase}
+                        style={{ padding: '8px 24px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                    >
+                        Vista Previa
+                    </button>
+                    <button
+                        onClick={descargarDocumento}
+                        disabled={generando}
+                        style={{
+                            padding: '8px 24px',
+                            background: generando ? '#93c5fd' : '#16a34a',
+                            color: '#fff',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: generando ? 'not-allowed' : 'pointer'
+                        }}
+                    >
+                        {generando ? 'Generando...' : `Descargar ${formato.toUpperCase()}`}
+                    </button>
+                </div>
             </div>
 
+            {/* Vista previa del certificado individual */}
             {certificadoData && (
-                <div className="card" style={{ border: '2px solid #1e3a5f' }}>
-                    <h3>Certificado de Promocion</h3>
+                <div className="card" style={{ border: '2px solid #1e3a5f', marginTop: '20px' }}>
+                    <h3>Certificado de Promoción</h3>
                     <div style={{ padding: '1rem', background: '#f8fafc', borderRadius: '8px' }}>
                         <p><strong>Instituto Nacional de Apopa</strong></p>
-                        <p><strong>Certificado de Promocion</strong></p>
+                        <p><strong>Certificado de Promoción</strong></p>
                         <hr />
-                        <p><strong>Estudiante:</strong> {certificadoData.estudiante}</p>
-                        <p><strong>Codigo:</strong> {certificadoData.codigo}</p>
+                        <p><strong>Estudiante:</strong> {certificadoData.nombreCompleto}</p>
+                        <p><strong>Código:</strong> {certificadoData.codigoEstudiante}</p>
+                        <p><strong>NIE:</strong> {certificadoData.nie || '-'}</p>
+                        <p><strong>Nivel:</strong> {certificadoData.nivelBachillerato}</p>
+                        <p><strong>Especialidad:</strong> {certificadoData.especialidad}</p>
+                        <p><strong>Sección:</strong> {certificadoData.seccion}</p>
                         <p><strong>Año Lectivo:</strong> {certificadoData.anioLectivo}</p>
-                        <p><strong>Promedio General:</strong> {certificadoData.promedio}</p>
-                        <p><strong>Materias Aprobadas:</strong> {certificadoData.aprobadas}</p>
-                        <p><strong>Materias Reprobadas:</strong> {certificadoData.reprobadas}</p>
-                        <p><strong>Estado:</strong> <span style={{
-                            padding: '4px 12px',
-                            borderRadius: '12px',
-                            fontSize: '14px',
-                            fontWeight: 'bold',
-                            backgroundColor: certificadoData.estado === 'PROMOVIDO' ? '#dcfce7' : '#fee2e2',
-                            color: certificadoData.estado === 'PROMOVIDO' ? '#15803d' : '#b91c1c'
-                        }}>
-                            {certificadoData.estado}
-                        </span></p>
-                        <p><strong>Fecha:</strong> {certificadoData.fecha}</p>
+                        <p><strong>Promedio General:</strong> {certificadoData.promedioGeneral.toFixed(2)}</p>
+                        <p><strong>Materias Aprobadas:</strong> {certificadoData.materiasAprobadas}</p>
+                        <p><strong>Materias Reprobadas:</strong> {certificadoData.materiasReprobadas}</p>
+                        <p><strong>Estado:</strong>
+                            <span style={{
+                                marginLeft: '8px',
+                                padding: '4px 12px',
+                                borderRadius: '12px',
+                                fontSize: '14px',
+                                fontWeight: 'bold',
+                                backgroundColor: certificadoData.estado === 'PROMOVIDO' ? '#dcfce7' : '#fee2e2',
+                                color: certificadoData.estado === 'PROMOVIDO' ? '#15803d' : '#b91c1c'
+                            }}>
+                                {certificadoData.estado}
+                            </span>
+                        </p>
                     </div>
-                    <button className="btn-success" onClick={() => window.print()} style={{ marginTop: '1rem', padding: '8px 16px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-                        Imprimir Certificado
-                    </button>
+                </div>
+            )}
+
+            {/* Vista previa de certificados por clase */}
+            {certificadosClase.length > 0 && (
+                <div className="card" style={{ border: '2px solid #1e3a5f', marginTop: '20px' }}>
+                    <h3>Certificados de la Clase ({certificadosClase.length})</h3>
+                    <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                        {certificadosClase.map((cert, idx) => (
+                            <div key={idx} style={{ padding: '0.75rem', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                <div>
+                                    <strong>{cert.nombreCompleto}</strong>
+                                    <span style={{ color: '#64748b', marginLeft: '8px', fontSize: '13px' }}>
+                                        {cert.codigoEstudiante}
+                                    </span>
+                                </div>
+                                <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                                    <span>Prom: {cert.promedioGeneral.toFixed(2)}</span>
+                                    <span style={{
+                                        padding: '2px 8px',
+                                        borderRadius: '10px',
+                                        fontSize: '12px',
+                                        fontWeight: 'bold',
+                                        backgroundColor: cert.estado === 'PROMOVIDO' ? '#dcfce7' : '#fee2e2',
+                                        color: cert.estado === 'PROMOVIDO' ? '#15803d' : '#b91c1c'
+                                    }}>
+                                        {cert.estado}
+                                    </span>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
         </DashboardLayout>

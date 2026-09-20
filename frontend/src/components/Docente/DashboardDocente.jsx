@@ -192,7 +192,7 @@ const DashboardDocente = () => {
                 {/* Header */}
                 <div className="dashboard-header">
                     <div className="header-left">
-                        <h1>Bienvenido, {user?.nombres || 'Docente'} 👋</h1>
+                        <h1>Bienvenido, {user?.nombres || 'Docente'} </h1>
                         <p className="fecha-actual">
                             {new Date().toLocaleDateString('es-ES', {
                                 weekday: 'long',

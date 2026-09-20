@@ -1,21 +1,28 @@
-// Componente Gestión de Entrevistas (Dirección): programa entrevistas y aprueba o rechaza aspirantes.
-import React, { useState, useEffect } from 'react';
+// Componente Gestión de Entrevistas (Dirección) - MEJORADO
+// Programa entrevistas y aprueba o rechaza aspirantes.
+import React, { useState, useEffect, useMemo } from 'react';
 import DashboardLayout from '../Layout/DashboardLayout';
 import API from '../../services/api';
 
-// Componente principal: administra el flujo de entrevistas de los aspirantes al instituto.
 const GestionEntrevistas = () => {
-    // Estados: aspirantes pendientes, entrevistas, entrevistadores y mensajes.
+    // ============================================================
+    // ESTADOS
+    // ============================================================
     const [aspirantesPendientes, setAspirantesPendientes] = useState([]);
     const [entrevistasProgramadas, setEntrevistasProgramadas] = useState([]);
     const [entrevistadores, setEntrevistadores] = useState([]);
     const [especialidades, setEspecialidades] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState('');
     const [messageType, setMessageType] = useState('');
 
+    // Filtros
+    const [busquedaPendientes, setBusquedaPendientes] = useState('');
+    const [filterEstadoEntrevista, setFilterEstadoEntrevista] = useState('todas');
+    const [busquedaEntrevistas, setBusquedaEntrevistas] = useState('');
+
     // Modal Programar
-    // Estados del modal de programación: aspirante seleccionado y formulario de fecha/entrevistador.
     const [showModal, setShowModal] = useState(false);
     const [selectedAspirante, setSelectedAspirante] = useState(null);
     const [formData, setFormData] = useState({
@@ -24,7 +31,6 @@ const GestionEntrevistas = () => {
     });
 
     // Modal Resultado
-    // Estados del modal de resultado: entrevista seleccionada y datos de la evaluación.
     const [showResultadoModal, setShowResultadoModal] = useState(false);
     const [selectedEntrevista, setSelectedEntrevista] = useState(null);
     const [clasesDisponibles, setClasesDisponibles] = useState([]);
@@ -35,22 +41,19 @@ const GestionEntrevistas = () => {
         motivoRechazo: ''
     });
 
-    // Carga aspirantes, entrevistas y docentes al montar el componente.
+    // ============================================================
+    // CARGA DE DATOS
+    // ============================================================
     useEffect(() => {
         cargarDatos();
     }, []);
 
-    // Obtiene en paralelo aspirantes, entrevistas y docentes entrevistadores.
     const cargarDatos = async () => {
         try {
             const [aspirantesRes, entrevistasRes, docentesRes, especialidadesRes] = await Promise.all([
-                // Petición GET /aspirantes para listar las solicitudes pendientes.
                 API.get('/aspirantes'),
-                // Petición GET /entrevistas para listar las entrevistas programadas.
                 API.get('/entrevistas'),
-                // Petición GET /docentes para el selector de entrevistador.
                 API.get('/docentes'),
-                // Petición GET /clases/especialidades para el catálogo real de especialidades.
                 API.get('/clases/especialidades')
             ]);
             const pendientes = aspirantesRes.data.filter(a => a.estadoSolicitud === 'Pendiente');
@@ -65,21 +68,48 @@ const GestionEntrevistas = () => {
         }
     };
 
-    // Muestra un mensaje temporal al usuario y lo limpia después de 4 segundos.
+    // ============================================================
+    // MENSAJES
+    // ============================================================
     const mostrarMensaje = (texto, tipo) => {
         setMessage(texto);
         setMessageType(tipo);
         setTimeout(() => setMessage(''), 4000);
     };
 
-    // Devuelve el nombre de la especialidad a partir de su id usando el catálogo real de la API.
+    // ============================================================
+    // HELPERS
+    // ============================================================
     const getEspecialidadNombre = (id) => {
         if (!id) return 'Bachillerato General';
         const esp = especialidades.find(e => e.idEspecialidad === Number(id));
         return esp ? esp.nombreEspecialidad : '-';
     };
 
-    // Valida fecha y entrevistador, verifica el NIE y programa la entrevista.
+    const formatearFecha = (fecha) => {
+        if (!fecha) return '-';
+        return new Date(fecha).toLocaleString('es-SV', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    const getEstadoBadge = (estado) => {
+        switch (estado) {
+            case 'Aprobado': return { bg: '#dcfce7', color: '#15803d', border: '#16a34a', label: 'Aprobado' };
+            case 'Rechazado': return { bg: '#fee2e2', color: '#b91c1c', border: '#dc2626', label: 'Rechazado' };
+            case 'En Espera':
+            case 'Programada':
+            default: return { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6', label: 'Programada' };
+        }
+    };
+
+    // ============================================================
+    // PROGRAMAR ENTREVISTA
+    // ============================================================
     const handleProgramar = async (e) => {
         e.preventDefault();
         if (!selectedAspirante) return;
@@ -92,12 +122,11 @@ const GestionEntrevistas = () => {
             return;
         }
 
+        setSaving(true);
         try {
-            // Antes de programar, comprobar si el NIE ya está en estudiantes
             const nieVal = selectedAspirante?.nie && String(selectedAspirante.nie).trim();
             if (nieVal) {
                 try {
-                    // Petición GET /estudiantes para verificar si el NIE ya está registrado.
                     const estudiantesResp = await API.get('/estudiantes');
                     const estudiantes = estudiantesResp.data || [];
                     const exists = estudiantes.find(s => s.nie && String(s.nie).trim() === nieVal);
@@ -110,7 +139,6 @@ const GestionEntrevistas = () => {
                 }
             }
 
-            // Petición POST /entrevistas/programar para agendar la entrevista del aspirante.
             await API.post('/entrevistas/programar', {
                 idAspirante: selectedAspirante.idAspirante,
                 fechaEntrevista: formData.fechaEntrevista,
@@ -123,10 +151,14 @@ const GestionEntrevistas = () => {
             cargarDatos();
         } catch (error) {
             mostrarMensaje('Error al programar entrevista', 'error');
+        } finally {
+            setSaving(false);
         }
     };
 
-    // Registra el resultado aprobado de la entrevista y convierte al aspirante en estudiante.
+    // ============================================================
+    // APROBAR
+    // ============================================================
     const handleAceptar = async () => {
         if (!selectedEntrevista) return;
         if (!resultadoData.observaciones.trim()) {
@@ -140,15 +172,13 @@ const GestionEntrevistas = () => {
             return;
         }
 
+        setSaving(true);
         try {
-            // 1º Aprobar la solicitud del aspirante asignándole la clase (PUT /aspirantes/aprobar/{id}).
-            // La matrícula formal (creación del estudiante) la realiza Registro Académico en "Matrículas".
             await API.put(`/aspirantes/aprobar/${idAspirante}`, {
                 idClaseAsignada: clase.idClase,
                 aprobadoPor: 'Direccion'
             });
 
-            // 2º Registrar el resultado de la entrevista (POST /entrevistas/registrar-resultado).
             await API.post('/entrevistas/registrar-resultado', {
                 idAspirante,
                 aprobado: true,
@@ -166,10 +196,14 @@ const GestionEntrevistas = () => {
         } catch (error) {
             console.error('Error aprobando aspirante:', error);
             mostrarMensaje(error.response?.data?.mensaje || 'Error al aprobar', 'error');
+        } finally {
+            setSaving(false);
         }
     };
 
-    // Registra el resultado de rechazo de la entrevista y rechaza al aspirante.
+    // ============================================================
+    // RECHAZAR
+    // ============================================================
     const handleRechazar = async () => {
         if (!selectedEntrevista) return;
         if (!resultadoData.motivoRechazo.trim()) {
@@ -177,8 +211,8 @@ const GestionEntrevistas = () => {
             return;
         }
 
+        setSaving(true);
         try {
-            // Petición POST /entrevistas/registrar-resultado para guardar el rechazo.
             await API.post('/entrevistas/registrar-resultado', {
                 idAspirante: selectedEntrevista.idAspirante || selectedEntrevista.id,
                 aprobado: false,
@@ -186,8 +220,6 @@ const GestionEntrevistas = () => {
                 motivoRechazo: resultadoData.motivoRechazo
             });
 
-            // Rechazar al aspirante
-            // Petición PUT /aspirantes/rechazar/{id} para marcar la solicitud como rechazada.
             await API.put(`/aspirantes/rechazar/${selectedEntrevista.idAspirante || selectedEntrevista.id}`, {
                 rechazadoPor: 'Direccion',
                 motivo: resultadoData.motivoRechazo
@@ -202,10 +234,14 @@ const GestionEntrevistas = () => {
             cargarDatos();
         } catch (error) {
             mostrarMensaje('Error al rechazar', 'error');
+        } finally {
+            setSaving(false);
         }
     };
 
-    // Abre el modal de resultado, carga la entrevista seleccionada y las clases disponibles del aspirante.
+    // ============================================================
+    // ABRIR MODAL RESULTADO
+    // ============================================================
     const abrirResultadoModal = async (entrevista) => {
         setSelectedEntrevista(entrevista);
         setResultadoData({
@@ -219,14 +255,12 @@ const GestionEntrevistas = () => {
 
         const idAspirante = entrevista.idAspirante || entrevista.id;
         try {
-            // Petición GET /aspirantes/{id} para conocer la especialidad y nota del aspirante.
             const [aspRes, clasesRes] = await Promise.all([
                 API.get(`/aspirantes/${idAspirante}`),
                 API.get('/clases')
             ]);
             const aspirante = aspRes.data || {};
             const anio = new Date().getFullYear();
-            // Clases activas de la especialidad del aspirante, del año actual y con cupo.
             const disponibles = (clasesRes.data || []).filter(c =>
                 c.idEspecialidad === aspirante.especialidadAspira
                 && c.estado
@@ -240,277 +274,498 @@ const GestionEntrevistas = () => {
         }
     };
 
+    // ============================================================
+    // FILTRADO Y ESTADÍSTICAS
+    // ============================================================
+    const aspirantesFiltrados = useMemo(() => {
+        const term = busquedaPendientes.trim().toLowerCase();
+        if (!term) return aspirantesPendientes;
+        return aspirantesPendientes.filter(a =>
+            `${a.nombres} ${a.apellidos}`.toLowerCase().includes(term) ||
+            (a.correo && a.correo.toLowerCase().includes(term)) ||
+            (a.nie && String(a.nie).toLowerCase().includes(term))
+        );
+    }, [aspirantesPendientes, busquedaPendientes]);
+
+    const entrevistasFiltradas = useMemo(() => {
+        return entrevistasProgramadas.filter(e => {
+            // Filtro por estado
+            if (filterEstadoEntrevista !== 'todas') {
+                const estado = e.estado === 'En Espera' ? 'Programada' : (e.estado || 'Programada');
+                if (estado !== filterEstadoEntrevista) return false;
+            }
+            // Búsqueda
+            if (busquedaEntrevistas) {
+                const term = busquedaEntrevistas.toLowerCase();
+                return (
+                    (e.aspirante && e.aspirante.toLowerCase().includes(term)) ||
+                    (e.entrevistador && e.entrevistador.toLowerCase().includes(term))
+                );
+            }
+            return true;
+        });
+    }, [entrevistasProgramadas, filterEstadoEntrevista, busquedaEntrevistas]);
+
+    const stats = useMemo(() => ({
+        pendientes: aspirantesPendientes.length,
+        programadas: entrevistasProgramadas.filter(e =>
+            e.estado === 'En Espera' || e.estado === 'Programada' || !e.estado
+        ).length,
+        aprobadas: entrevistasProgramadas.filter(e => e.estado === 'Aprobado').length,
+        rechazadas: entrevistasProgramadas.filter(e => e.estado === 'Rechazado').length
+    }), [aspirantesPendientes, entrevistasProgramadas]);
+
+    // ============================================================
+    // RENDER LOADING
+    // ============================================================
     if (loading) {
         return (
-            <DashboardLayout title="Gestion de Entrevistas">
+            <DashboardLayout title="Gestión de Entrevistas - Dirección">
                 <div className="loading">Cargando...</div>
             </DashboardLayout>
         );
     }
 
+    // ============================================================
+    // RENDER PRINCIPAL
+    // ============================================================
     return (
-        <DashboardLayout title="Gestion de Entrevistas - Direccion">
-            {message && (
-                <div style={{
-                    padding: '0.75rem',
-                    borderRadius: '8px',
-                    marginBottom: '1rem',
-                    backgroundColor: messageType === 'success' ? '#dcfce7' : '#fee2e2',
-                    color: messageType === 'success' ? '#15803d' : '#b91c1c'
-                }}>
-                    {message}
-                </div>
-            )}
+        <DashboardLayout title="Gestión de Entrevistas - Dirección">
+            <style>{`
+                .ge-container { display: flex; flex-direction: column; gap: 20px; }
+                .ge-card { background: #fff; border-radius: 12px; padding: 22px; box-shadow: 0 2px 10px rgba(0,0,0,.06); border: 1px solid #e2e8f0; }
+                .ge-card h3 { margin: 0 0 16px; color: #1e3a5f; font-size: 18px; }
 
-            {/* Aspirantes Pendientes */}
-            <div className="card">
-                <h3>Aspirantes Pendientes de Entrevista</h3>
-                <div className="table-responsive">
-                    <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr style={{ background: '#f1f5f9' }}>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>ID</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Nombres</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Apellidos</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Especialidad</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Correo</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Telefono</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {aspirantesPendientes.length === 0 ? (
-                                <tr>
-                                    <td colSpan="7" style={{ padding: '20px', textAlign: 'center' }}>
-                                        No hay aspirantes pendientes
-                                    </td>
-                                </tr>
-                            ) : (
-                                aspirantesPendientes.map(a => (
-                                    <tr key={a.idAspirante} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                        <td style={{ padding: '8px' }}>{a.idAspirante}</td>
-                                        <td style={{ padding: '8px' }}><strong>{a.nombres}</strong></td>
-                                        <td style={{ padding: '8px' }}>{a.apellidos}</td>
-                                        <td style={{ padding: '8px' }}>{getEspecialidadNombre(a.especialidadAspira)}</td>
-                                        <td style={{ padding: '8px' }}>{a.correo || '-'}</td>
-                                        <td style={{ padding: '8px' }}>{a.telefono || '-'}</td>
-                                        <td style={{ padding: '8px' }}>
-                                            <button
-                                                className="btn-primary"
-                                                onClick={() => {
-                                                    setSelectedAspirante(a);
-                                                    setShowModal(true);
-                                                }}
-                                                style={{ padding: '6px 14px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                            >
-                                                Programar Entrevista
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                /* Estadísticas */
+                .ge-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+                .ge-stat { padding: 16px; border-radius: 10px; text-align: center; border: 1px solid #e2e8f0; background: #f8fafc; }
+                .ge-stat .num { font-size: 24px; font-weight: bold; display: block; line-height: 1.2; }
+                .ge-stat .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #64748b; margin-top: 4px; }
+                .ge-stat-pendientes { background: #fef3c7; color: #b45309; }
+                .ge-stat-programadas { background: #dbeafe; color: #1d4ed8; }
+                .ge-stat-aprobadas { background: #dcfce7; color: #15803d; }
+                .ge-stat-rechazadas { background: #fee2e2; color: #b91c1c; }
 
-            {/* Entrevistas Programadas */}
-            <div className="card">
-                <h3>Entrevistas Programadas</h3>
-                <div className="table-responsive">
-                    <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr style={{ background: '#f1f5f9' }}>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Aspirante</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Fecha</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Entrevistador</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Observaciones</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Estado</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {entrevistasProgramadas.length === 0 ? (
-                                <tr>
-                                    <td colSpan="6" style={{ padding: '20px', textAlign: 'center' }}>
-                                        No hay entrevistas programadas
-                                    </td>
-                                </tr>
-                            ) : (
-                                entrevistasProgramadas.map(e => (
-                                    <tr key={e.id} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                        <td style={{ padding: '8px' }}><strong>{e.aspirante}</strong></td>
-                                        <td style={{ padding: '8px' }}>{new Date(e.fechaEntrevista).toLocaleString()}</td>
-                                        <td style={{ padding: '8px' }}>{e.entrevistador || 'Pendiente'}</td>
-                                        <td style={{ padding: '8px' }}>{e.observaciones || '-'}</td>
-                                        <td style={{ padding: '8px' }}>
-                                            <span style={{
-                                                padding: '4px 12px',
-                                                borderRadius: '12px',
-                                                fontSize: '12px',
-                                                fontWeight: 'bold',
-                                                backgroundColor: e.estado === 'En Espera' || e.estado === 'Programada' ? '#3b82f6' :
-                                                    e.estado === 'Aprobado' ? '#16a34a' : '#dc2626',
-                                                color: '#fff'
-                                            }}>
-                                                {e.estado === 'En Espera' ? 'Programada' : (e.estado || 'Programada')}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '8px' }}>
-                                            {e.estado !== 'Aprobado' && e.estado !== 'Rechazado' && (
-                                                <button
-                                                    className="btn-edit"
-                                                    onClick={() => abrirResultadoModal(e)}
-                                                    style={{ padding: '6px 14px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                                >
-                                                    Registrar Resultado
-                                                </button>
-                                            )}
-                                            {e.estado === 'Aprobado' && (
-                                                <span style={{ color: '#16a34a', fontWeight: 'bold' }}>Aprobado</span>
-                                            )}
-                                            {e.estado === 'Rechazado' && (
-                                                <span style={{ color: '#dc2626', fontWeight: 'bold' }}>Rechazado</span>
-                                            )}
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                /* Filtros */
+                .ge-filtros { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+                .ge-filtros-left { display: flex; gap: 10px; flex-wrap: wrap; flex: 1; }
+                .ge-field { flex: 1; min-width: 200px; }
+                .ge-field input, .ge-field select {
+                    width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1;
+                    border-radius: 8px; font-size: 14px; box-sizing: border-box;
+                    font-family: inherit; transition: border-color .2s, box-shadow .2s;
+                }
+                .ge-field input:focus, .ge-field select:focus {
+                    outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.1);
+                }
 
-            {/* Modal Programar Entrevista */}
-            {showModal && (
-                <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-                    <div className="modal-container" style={{ background: '#fff', borderRadius: '12px', maxWidth: '450px', width: '100%', padding: '24px' }}>
-                        <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h3>Programar Entrevista</h3>
-                            <button className="modal-close" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>X</button>
-                        </div>
-                        <div className="modal-body">
-                            <p><strong>Aspirante:</strong> {selectedAspirante?.nombres} {selectedAspirante?.apellidos}</p>
-                            <p><strong>Correo:</strong> {selectedAspirante?.correo || 'No registrado'}</p>
-                            <div className="form-group" style={{ marginTop: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Fecha y Hora *</label>
+                /* Botones */
+                .ge-btn {
+                    padding: 9px 16px; border: none; border-radius: 8px;
+                    font-size: 13px; font-weight: 500; cursor: pointer;
+                    transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+                }
+                .ge-btn:disabled { opacity: .6; cursor: not-allowed; }
+                .ge-btn-primary { background: #1e3a5f; color: #fff; }
+                .ge-btn-primary:hover:not(:disabled) { background: #16293f; }
+                .ge-btn-info { background: #3b82f6; color: #fff; }
+                .ge-btn-info:hover:not(:disabled) { background: #2563eb; }
+                .ge-btn-success { background: #16a34a; color: #fff; }
+                .ge-btn-success:hover:not(:disabled) { background: #15803d; }
+                .ge-btn-danger { background: #dc2626; color: #fff; }
+                .ge-btn-danger:hover:not(:disabled) { background: #b91c1c; }
+                .ge-btn-secondary { background: #e5e7eb; color: #334155; }
+                .ge-btn-secondary:hover:not(:disabled) { background: #d1d5db; }
+                .ge-btn-sm { padding: 5px 12px; font-size: 12px; }
+
+                /* Tabla */
+                .ge-table { width: 100%; border-collapse: collapse; }
+                .ge-table thead th {
+                    background: #1e3a5f; color: #fff; padding: 11px 10px;
+                    text-align: left; font-size: 12px; text-transform: uppercase;
+                    letter-spacing: .5px; font-weight: 600;
+                }
+                .ge-table thead th:first-child { border-top-left-radius: 8px; }
+                .ge-table thead th:last-child { border-top-right-radius: 8px; }
+                .ge-table tbody tr { border-bottom: 1px solid #e2e8f0; transition: background .15s; }
+                .ge-table tbody tr:hover { background: #f8fafc; }
+                .ge-table tbody tr:nth-child(even) { background: #fafbfc; }
+                .ge-table tbody tr:nth-child(even):hover { background: #f1f5f9; }
+                .ge-table td { padding: 10px; font-size: 13px; color: #334155; vertical-align: middle; }
+
+                .ge-badge {
+                    display: inline-block; padding: 4px 12px; border-radius: 12px;
+                    font-size: 11px; font-weight: 600; text-transform: uppercase;
+                }
+
+                .ge-aviso { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; font-weight: 500; }
+                .ge-aviso.success { background: #dcfce7; color: #15803d; border-left: 4px solid #16a34a; }
+                .ge-aviso.error { background: #fee2e2; color: #b91c1c; border-left: 4px solid #dc2626; }
+
+                .ge-empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+
+                /* Modal */
+                .ge-modal-overlay {
+                    position: fixed; top:0; left:0; width:100%; height:100%;
+                    background: rgba(15,23,42,.55);
+                    display: flex; align-items: center; justify-content: center;
+                    z-index: 999; padding: 20px;
+                }
+                .ge-modal {
+                    background: #fff; border-radius: 12px;
+                    max-width: 520px; width: 100%; padding: 24px;
+                    max-height: 90vh; overflow-y: auto;
+                }
+                .ge-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+                .ge-modal-header h3 { margin: 0; font-size: 17px; color: #1e3a5f; }
+                .ge-modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; line-height: 1; }
+                .ge-modal-close:hover { color: #dc2626; }
+                .ge-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+                .ge-info-box { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #1e40af; }
+
+                .ge-field-modal { margin-bottom: 14px; }
+                .ge-field-modal label { display: block; font-weight: 600; color: #34495e; font-size: 13px; margin-bottom: 6px; }
+                .ge-field-modal input, .ge-field-modal select, .ge-field-modal textarea {
+                    width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1;
+                    border-radius: 8px; font-size: 14px; box-sizing: border-box;
+                    font-family: inherit; transition: border-color .2s, box-shadow .2s;
+                }
+                .ge-field-modal input:focus, .ge-field-modal select:focus, .ge-field-modal textarea:focus {
+                    outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.1);
+                }
+                .ge-field-modal textarea { min-height: 80px; resize: vertical; }
+
+                @media (max-width: 768px) {
+                    .ge-filtros { flex-direction: column; }
+                    .ge-filtros-left { width: 100%; }
+                    .ge-table { font-size: 12px; }
+                    .ge-table thead th, .ge-table td { padding: 8px 6px; }
+                }
+            `}</style>
+
+            <div className="ge-container">
+                {message && <div className={`ge-aviso ${messageType}`}>{message}</div>}
+
+                {/* ESTADÍSTICAS */}
+                <div className="ge-stats">
+                    <div className="ge-stat ge-stat-pendientes">
+                        <span className="num">{stats.pendientes}</span>
+                        <span className="lbl">Pendientes</span>
+                    </div>
+                    <div className="ge-stat ge-stat-programadas">
+                        <span className="num">{stats.programadas}</span>
+                        <span className="lbl">Programadas</span>
+                    </div>
+                    <div className="ge-stat ge-stat-aprobadas">
+                        <span className="num">{stats.aprobadas}</span>
+                        <span className="lbl">Aprobadas</span>
+                    </div>
+                    <div className="ge-stat ge-stat-rechazadas">
+                        <span className="num">{stats.rechazadas}</span>
+                        <span className="lbl">Rechazadas</span>
+                    </div>
+                </div>
+
+                {/* ASPIRANTES PENDIENTES */}
+                <div className="ge-card">
+                    <h3>Aspirantes Pendientes de Entrevista</h3>
+
+                    <div className="ge-filtros">
+                        <div className="ge-filtros-left">
+                            <div className="ge-field">
                                 <input
-                                    type="datetime-local"
-                                    value={formData.fechaEntrevista}
-                                    onChange={(e) => setFormData({ ...formData, fechaEntrevista: e.target.value })}
-                                    required
-                                    className="form-control"
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+                                    type="text"
+                                    placeholder="Buscar por nombre, correo o NIE..."
+                                    value={busquedaPendientes}
+                                    onChange={(e) => setBusquedaPendientes(e.target.value)}
                                 />
                             </div>
-                            <div className="form-group" style={{ marginTop: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Entrevistador *</label>
-                                <select
-                                    value={formData.entrevistador}
-                                    onChange={(e) => setFormData({ ...formData, entrevistador: e.target.value })}
-                                    required
-                                    className="form-control"
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                                >
-                                    <option value="">Seleccionar entrevistador</option>
-                                    {entrevistadores.map(doc => {
-                                        const id = doc.idDocente || doc.IdDocente || doc.id || doc.Id;
-                                        const nombre = (doc.nombres || doc.Nombres || doc.nombre || doc.nombreCompleto) + ' ' + (doc.apellidos || doc.Apellidos || '');
-                                        return (<option key={id} value={nombre}>{nombre}</option>);
-                                    })}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>
+                            Mostrando <strong>{aspirantesFiltrados.length}</strong> de {aspirantesPendientes.length}
+                        </div>
+                    </div>
+
+                    <div className="table-responsive">
+                        <table className="ge-table">
+                            <thead>
+                                <tr>
+                                    <th style={{ width: '55px' }}>ID</th>
+                                    <th>Nombres</th>
+                                    <th>Apellidos</th>
+                                    <th>Especialidad</th>
+                                    <th>Correo</th>
+                                    <th>Teléfono</th>
+                                    <th style={{ width: '180px' }}>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {aspirantesFiltrados.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="7" className="ge-empty">
+                                            No hay aspirantes pendientes
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    aspirantesFiltrados.map(a => (
+                                        <tr key={a.idAspirante}>
+                                            <td style={{ color: '#64748b' }}>{a.idAspirante}</td>
+                                            <td><strong>{a.nombres}</strong></td>
+                                            <td>{a.apellidos}</td>
+                                            <td style={{ fontSize: '12px' }}>{getEspecialidadNombre(a.especialidadAspira)}</td>
+                                            <td style={{ fontSize: '12px' }}>{a.correo || '-'}</td>
+                                            <td style={{ fontSize: '12px' }}>{a.telefono || '-'}</td>
+                                            <td>
+                                                <button
+                                                    className="ge-btn ge-btn-primary ge-btn-sm"
+                                                    onClick={() => {
+                                                        setSelectedAspirante(a);
+                                                        setShowModal(true);
+                                                    }}
+                                                >
+                                                    Programar Entrevista
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                {/* ENTREVISTAS PROGRAMADAS */}
+                <div className="ge-card">
+                    <h3>Entrevistas Programadas</h3>
+
+                    <div className="ge-filtros">
+                        <div className="ge-filtros-left">
+                            <div className="ge-field">
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por aspirante o entrevistador..."
+                                    value={busquedaEntrevistas}
+                                    onChange={(e) => setBusquedaEntrevistas(e.target.value)}
+                                />
+                            </div>
+                            <div className="ge-field">
+                                <select value={filterEstadoEntrevista} onChange={(e) => setFilterEstadoEntrevista(e.target.value)}>
+                                    <option value="todas">Todos los estados</option>
+                                    <option value="Programada">Programadas</option>
+                                    <option value="Aprobado">Aprobadas</option>
+                                    <option value="Rechazado">Rechazadas</option>
                                 </select>
                             </div>
-                            <div className="modal-buttons" style={{ display: 'flex', gap: '12px', marginTop: '20px', justifyContent: 'flex-end' }}>
-                                <button className="btn-cancel" onClick={() => setShowModal(false)} style={{ padding: '8px 20px', background: '#e5e7eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancelar</button>
-                                <button className="btn-primary" onClick={handleProgramar} style={{ padding: '8px 20px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Programar</button>
-                            </div>
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>
+                            Mostrando <strong>{entrevistasFiltradas.length}</strong> de {entrevistasProgramadas.length}
+                        </div>
+                    </div>
+
+                    <div className="table-responsive">
+                        <table className="ge-table">
+                            <thead>
+                                <tr>
+                                    <th>Aspirante</th>
+                                    <th>Fecha</th>
+                                    <th>Entrevistador</th>
+                                    <th>Observaciones</th>
+                                    <th style={{ width: '130px' }}>Estado</th>
+                                    <th style={{ width: '180px' }}>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {entrevistasFiltradas.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="6" className="ge-empty">
+                                            No hay entrevistas que coincidan
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    entrevistasFiltradas.map(e => {
+                                        const badge = getEstadoBadge(e.estado);
+                                        return (
+                                            <tr key={e.id}>
+                                                <td><strong>{e.aspirante}</strong></td>
+                                                <td style={{ fontSize: '12px' }}>{formatearFecha(e.fechaEntrevista)}</td>
+                                                <td>{e.entrevistador || 'Pendiente'}</td>
+                                                <td style={{ fontSize: '12px' }}>{e.observaciones || '-'}</td>
+                                                <td>
+                                                    <span
+                                                        className="ge-badge"
+                                                        style={{
+                                                            backgroundColor: badge.bg,
+                                                            color: badge.color,
+                                                            border: `1px solid ${badge.border}`
+                                                        }}
+                                                    >
+                                                        {badge.label}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    {e.estado !== 'Aprobado' && e.estado !== 'Rechazado' && (
+                                                        <button
+                                                            className="ge-btn ge-btn-info ge-btn-sm"
+                                                            onClick={() => abrirResultadoModal(e)}
+                                                        >
+                                                            Registrar Resultado
+                                                        </button>
+                                                    )}
+                                                    {e.estado === 'Aprobado' && (
+                                                        <span style={{ color: '#15803d', fontWeight: '600', fontSize: '12px' }}>
+                                                            Aprobado
+                                                        </span>
+                                                    )}
+                                                    {e.estado === 'Rechazado' && (
+                                                        <span style={{ color: '#b91c1c', fontWeight: '600', fontSize: '12px' }}>
+                                                            Rechazado
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            {/* MODAL PROGRAMAR ENTREVISTA */}
+            {showModal && (
+                <div className="ge-modal-overlay" onClick={() => !saving && setShowModal(false)}>
+                    <div className="ge-modal" onClick={e => e.stopPropagation()}>
+                        <div className="ge-modal-header">
+                            <h3>Programar Entrevista</h3>
+                            <button className="ge-modal-close" onClick={() => setShowModal(false)} disabled={saving}>X</button>
+                        </div>
+
+                        <div className="ge-info-box">
+                            <strong>Aspirante:</strong> {selectedAspirante?.nombres} {selectedAspirante?.apellidos}<br />
+                            <strong>Correo:</strong> {selectedAspirante?.correo || 'No registrado'}
+                        </div>
+
+                        <div className="ge-field-modal">
+                            <label>Fecha y Hora *</label>
+                            <input
+                                type="datetime-local"
+                                value={formData.fechaEntrevista}
+                                onChange={(e) => setFormData({ ...formData, fechaEntrevista: e.target.value })}
+                                required
+                            />
+                        </div>
+
+                        <div className="ge-field-modal">
+                            <label>Entrevistador *</label>
+                            <select
+                                value={formData.entrevistador}
+                                onChange={(e) => setFormData({ ...formData, entrevistador: e.target.value })}
+                                required
+                            >
+                                <option value="">Seleccionar entrevistador</option>
+                                {entrevistadores.map(doc => {
+                                    const id = doc.idDocente || doc.IdDocente || doc.id || doc.Id;
+                                    const nombre = `${doc.nombres || doc.Nombres || doc.nombre || ''} ${doc.apellidos || doc.Apellidos || ''}`.trim();
+                                    return <option key={id} value={nombre}>{nombre}</option>;
+                                })}
+                            </select>
+                        </div>
+
+                        <div className="ge-modal-actions">
+                            <button className="ge-btn ge-btn-secondary" onClick={() => setShowModal(false)} disabled={saving}>
+                                Cancelar
+                            </button>
+                            <button className="ge-btn ge-btn-primary" onClick={handleProgramar} disabled={saving}>
+                                {saving ? 'Programando...' : 'Programar'}
+                            </button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {/* Modal Registrar Resultado */}
+            {/* MODAL REGISTRAR RESULTADO */}
             {showResultadoModal && (
-                <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-                    <div className="modal-container" style={{ background: '#fff', borderRadius: '12px', maxWidth: '450px', width: '100%', padding: '24px' }}>
-                        <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div className="ge-modal-overlay" onClick={() => !saving && setShowResultadoModal(false)}>
+                    <div className="ge-modal" onClick={e => e.stopPropagation()}>
+                        <div className="ge-modal-header">
                             <h3>Registrar Resultado de Entrevista</h3>
-                            <button className="modal-close" onClick={() => setShowResultadoModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>X</button>
+                            <button className="ge-modal-close" onClick={() => setShowResultadoModal(false)} disabled={saving}>X</button>
                         </div>
-                        <div className="modal-body">
-                            <p><strong>Aspirante:</strong> {selectedEntrevista?.aspirante}</p>
-                            <p><strong>Fecha Entrevista:</strong> {selectedEntrevista?.fechaEntrevista ? new Date(selectedEntrevista.fechaEntrevista).toLocaleString() : '-'}</p>
 
-                            <div className="form-group" style={{ marginTop: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Resultado *</label>
+                        <div className="ge-info-box">
+                            <strong>Aspirante:</strong> {selectedEntrevista?.aspirante}<br />
+                            <strong>Fecha:</strong> {formatearFecha(selectedEntrevista?.fechaEntrevista)}
+                        </div>
+
+                        <div className="ge-field-modal">
+                            <label>Resultado *</label>
+                            <select
+                                value={resultadoData.aprobado}
+                                onChange={(e) => setResultadoData({ ...resultadoData, aprobado: e.target.value === 'true' })}
+                            >
+                                <option value="true">Aprobado</option>
+                                <option value="false">Rechazado</option>
+                            </select>
+                        </div>
+
+                        <div className="ge-field-modal">
+                            <label>Observaciones *</label>
+                            <textarea
+                                value={resultadoData.observaciones}
+                                onChange={(e) => setResultadoData({ ...resultadoData, observaciones: e.target.value })}
+                                placeholder="Observaciones de la entrevista..."
+                            />
+                        </div>
+
+                        {resultadoData.aprobado && (
+                            <div className="ge-field-modal">
+                                <label>Clase a Asignar *</label>
                                 <select
-                                    value={resultadoData.aprobado}
-                                    onChange={(e) => setResultadoData({ ...resultadoData, aprobado: e.target.value === 'true' })}
-                                    className="form-control"
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+                                    value={claseSeleccionada}
+                                    onChange={(e) => setClaseSeleccionada(e.target.value)}
                                 >
-                                    <option value="true">Aprobado</option>
-                                    <option value="false">Rechazado</option>
+                                    <option value="">Seleccionar clase</option>
+                                    {clasesDisponibles.map(c => (
+                                        <option key={c.idClase} value={c.idClase}>
+                                            {c.nombreClase} (Sección {c.seccion}) - Cupo {c.cupoActual}/{c.cupoMaximo}
+                                        </option>
+                                    ))}
                                 </select>
-                            </div>
-
-                            <div className="form-group" style={{ marginTop: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Observaciones *</label>
-                                <textarea
-                                    value={resultadoData.observaciones}
-                                    onChange={(e) => setResultadoData({ ...resultadoData, observaciones: e.target.value })}
-                                    rows="3"
-                                    className="form-control"
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                                    placeholder="Observaciones de la entrevista..."
-                                />
-                            </div>
-
-                            {resultadoData.aprobado && (
-                                <div className="form-group" style={{ marginTop: '12px' }}>
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Clase a Asignar *</label>
-                                    <select
-                                        value={claseSeleccionada}
-                                        onChange={(e) => setClaseSeleccionada(e.target.value)}
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                                    >
-                                        <option value="">Seleccionar clase</option>
-                                        {clasesDisponibles.map(c => (
-                                            <option key={c.idClase} value={c.idClase}>
-                                                {c.nombreClase} ({c.seccion}) - Cupo {c.cupoActual}/{c.cupoMaximo}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    {clasesDisponibles.length === 0 && (
-                                        <small style={{ color: '#dc2626' }}>No hay clases con cupo disponible para la especialidad del aspirante</small>
-                                    )}
-                                </div>
-                            )}
-
-                            {!resultadoData.aprobado && (
-                                <div className="form-group" style={{ marginTop: '12px' }}>
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Motivo del Rechazo *</label>
-                                    <textarea
-                                        value={resultadoData.motivoRechazo}
-                                        onChange={(e) => setResultadoData({ ...resultadoData, motivoRechazo: e.target.value })}
-                                        rows="3"
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                                        placeholder="Ingrese el motivo del rechazo..."
-                                        required
-                                    />
-                                </div>
-                            )}
-
-                            <div className="modal-buttons" style={{ display: 'flex', gap: '12px', marginTop: '20px', justifyContent: 'flex-end' }}>
-                                <button className="btn-cancel" onClick={() => setShowResultadoModal(false)} style={{ padding: '8px 20px', background: '#e5e7eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancelar</button>
-                                {resultadoData.aprobado ? (
-                                    <button className="btn-success" onClick={handleAceptar} style={{ padding: '8px 20px', background: '#16a34a', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Aceptar</button>
-                                ) : (
-                                    <button className="btn-danger" onClick={handleRechazar} style={{ padding: '8px 20px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Rechazar</button>
+                                {clasesDisponibles.length === 0 && (
+                                    <small style={{ color: '#dc2626', display: 'block', marginTop: '6px', fontSize: '12px' }}>
+                                        No hay clases con cupo disponible para la especialidad del aspirante
+                                    </small>
                                 )}
                             </div>
+                        )}
+
+                        {!resultadoData.aprobado && (
+                            <div className="ge-field-modal">
+                                <label>Motivo del Rechazo *</label>
+                                <textarea
+                                    value={resultadoData.motivoRechazo}
+                                    onChange={(e) => setResultadoData({ ...resultadoData, motivoRechazo: e.target.value })}
+                                    placeholder="Ingrese el motivo del rechazo..."
+                                    required
+                                />
+                            </div>
+                        )}
+
+                        <div className="ge-modal-actions">
+                            <button className="ge-btn ge-btn-secondary" onClick={() => setShowResultadoModal(false)} disabled={saving}>
+                                Cancelar
+                            </button>
+                            {resultadoData.aprobado ? (
+                                <button className="ge-btn ge-btn-success" onClick={handleAceptar} disabled={saving}>
+                                    {saving ? 'Aprobando...' : 'Aceptar'}
+                                </button>
+                            ) : (
+                                <button className="ge-btn ge-btn-danger" onClick={handleRechazar} disabled={saving}>
+                                    {saving ? 'Rechazando...' : 'Rechazar'}
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

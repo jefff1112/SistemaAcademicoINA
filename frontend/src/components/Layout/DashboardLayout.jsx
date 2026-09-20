@@ -4,20 +4,17 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import NotificacionesCampanita from './NotificacionesCampanita';
 
-// Componente principal: layout autenticado con menú lateral dinámico según el rol.
 const DashboardLayout = ({ children, title }) => {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
     const [sidebarOpen, setSidebarOpen] = useState(true);
 
-    // Cierra la sesión del usuario y redirige al login.
     const handleLogout = () => {
         logout();
         navigate('/login');
     };
 
-    // Construye las opciones del menú lateral según el rol y código del usuario.
     const getMenuItems = () => {
         const rol = user?.rol;
         const codigo = user?.codigo;
@@ -27,7 +24,7 @@ const DashboardLayout = ({ children, title }) => {
             return [
                 { label: 'Dashboard', path: '/dashboard' },
                 { label: 'Gestionar Usuarios', path: '/admin/usuarios' },
-                { label: 'Generar Horarios', path: '/admin/horarios/generar' },
+                
                 { label: 'Gestionar Roles', path: '/admin/roles' },
                 { label: 'Configuracion General', path: '/admin/configuracion' },
                 { label: 'Auditoria', path: '/admin/auditoria' },
@@ -42,6 +39,7 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Gestionar Periodos', path: '/admin/periodos' },
                 { label: 'Constancias', path: '/admin/constancias' },
                 { label: 'Título en Proceso', path: '/titulo-en-proceso' },
+                { label: 'Contenido Público', path: '/admin/contenido-publico' }, // ✅ NUEVO
             ];
         }
 
@@ -49,8 +47,7 @@ const DashboardLayout = ({ children, title }) => {
         if (rol === 'Direccion' || rol === 'Director' || codigo === 'DIR001') {
             return [
                 { label: 'Dashboard', path: '/dashboard' },
-                // Mostrar "Generar Horarios" justo debajo de Dashboard como en la imagen
-                { label: 'Generar Horarios', path: '/admin/horarios/generar' },
+                
                 { label: 'Gestionar Aspirantes', path: '/direccion/gestion-aspirantes' },
                 { label: 'Gestionar Estudiantes', path: '/direccion/estudiantes' },
                 { label: 'Gestionar Docentes', path: '/direccion/docentes' },
@@ -59,7 +56,6 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Módulos por Especialidad', path: '/modulos-especialidad' },
                 { label: 'Asignar Módulos a Docentes', path: '/asignar-modulos' },
                 { label: 'Gestionar Notas', path: '/direccion/cuadro-auxiliar' },
-                
                 { label: 'Gestionar Asistencias', path: '/direccion/asistencias' },
                 { label: 'Gestionar Conducta', path: '/direccion/conducta' },
                 { label: 'Gestionar Periodos', path: '/direccion/periodos' },
@@ -74,7 +70,7 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Notificaciones', path: '/admin/notificaciones' },
                 { label: 'Exportar Boletas', path: '/direccion/exportar-boletas' },
                 { label: 'Boleta de Notas', path: '/direccion/boleta-notas' },
-
+                { label: 'Contenido Público', path: '/direccion/contenido-publico' }, // ✅ NUEVO
             ];
         }
 
@@ -104,7 +100,6 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Reportes de Inasistencias', path: '/registro/reportes-inasistencias' },
                 { label: 'Exportar Boletas', path: '/registro/exportar-boletas' },
                 { label: 'Título en Proceso', path: '/titulo-en-proceso' },
-
             ];
         }
 
@@ -117,10 +112,12 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Asistencias', path: '/docente/asistencias' },
                 { label: 'Mi Horario', path: '/docente/horario' },
                 { label: 'Actividades', path: '/docente/actividades' },
+                { label: 'Conducta', path: '/docente/conducta' },
                 { label: 'Avisos', path: '/docente/avisos' },
                 { label: 'Mi Perfil', path: '/perfil' },
             ];
         }
+
         // ========== ESTUDIANTE ==========
         if (rol === 'Estudiante' || codigo === '2026-00001-INA') {
             return [
@@ -129,7 +126,7 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Mis Asistencias', path: '/estudiante/asistencias' },
                 { label: 'Mi Horario', path: '/estudiante/horario' },
                 { label: 'Mi Conducta', path: '/estudiante/conducta' },
-                { label: 'Mis Faltas', path: '/estudiante/faltas' },
+                
                 { label: 'Historial Academico', path: '/estudiante/historial' },
                 { label: 'Constancias', path: '/estudiante/constancias' },
                 { label: 'Mi Perfil', path: '/perfil' },
@@ -155,7 +152,6 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Gestionar Docentes', path: '/direccion/docentes' },
                 { label: 'Gestionar Clases', path: '/direccion/clases' },
                 { label: 'Gestionar Notas', path: '/direccion/cuadro-auxiliar' },
-                
                 { label: 'Gestionar Asistencias', path: '/direccion/asistencias' },
                 { label: 'Gestionar Conducta', path: '/direccion/conducta' },
                 { label: 'Reportes', path: '/direccion/reportes-avanzados' },
@@ -165,6 +161,7 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Constancias', path: '/direccion/constancias' },
                 { label: 'Título en Proceso', path: '/titulo-en-proceso' },
                 { label: 'Boleta de Notas', path: '/direccion/boleta-notas' },
+                { label: 'Contenido Público', path: '/direccion/contenido-publico' }, // ✅ NUEVO
                 { label: 'Mi Perfil', path: '/perfil' },
             ];
         }

@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Certificado de Promoción</title>
+    <style>
+        body {
+            font-family: 'Times New Roman', serif;
+            font-size: 14px;
+            line-height: 1.8;
+            margin: 0;
+            padding: 0;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+            .header img {
+                max-width: 120px;
+            }
+
+            .header h1 {
+                font-size: 22px;
+                font-weight: bold;
+                margin: 10px 0 5px;
+            }
+
+            .header h2 {
+                font-size: 18px;
+                font-weight: bold;
+                margin: 5px 0;
+            }
+
+        .content {
+            text-align: justify;
+            margin: 30px 0;
+        }
+
+        .datos-academicos {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ccc;
+            background: #f9f9f9;
+        }
+
+            .datos-academicos p {
+                margin: 5px 0;
+            }
+
+        .firma {
+            text-align: center;
+            margin-top: 60px;
+        }
+
+            .firma p {
+                margin: 5px 0;
+            }
+
+            .firma .nombre {
+                font-weight: bold;
+                border-top: 1px solid #000;
+                display: inline-block;
+                padding-top: 5px;
+                min-width: 250px;
+            }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="{{logoUrl}}" alt="Logo INA" />
+            <h1>INSTITUTO NACIONAL DE APOPA</h1>
+            <h2>CERTIFICADO DE PROMOCIÓN</h2>
+        </div>
+
+        <div class="content">
+            <p>
+                El suscrito Director del Instituto Nacional de Apopa, <strong>HACE CONSTAR QUE:</strong>
+            </p>
+            <p>
+                <strong>{{nombreEstudiante}}</strong>, con código de estudiante <strong>{{codigoEstudiante}}</strong>
+                y NIE <strong>{{nie}}</strong>, ha cursado y aprobado el <strong>{{nivelBachillerato}}</strong>
+                BACHILLERATO TÉCNICO VOCACIONAL EN <strong>{{especialidad}}</strong>, SECCIÓN "{{seccion}}",
+                durante el año lectivo <strong>{{anioLectivo}}</strong>.
+            </p>
+        </div>
+
+        <div class="datos-academicos">
+            <p><strong>Promedio General:</strong> {{promedioGeneral}}</p>
+            <p><strong>Materias Aprobadas:</strong> {{materiasAprobadas}}</p>
+            <p><strong>Materias Reprobadas:</strong> {{materiasReprobadas}}</p>
+            <p><strong>Estado:</strong> {{estado}}</p>
+        </div>
+
+        <div class="content">
+            <p>
+                Y, para los usos que el interesado estime conveniente se extiende la presente en la Ciudad de Apopa
+                a los {{dia}} días del mes de {{mes}} de {{anio}}.
+            </p>
+        </div>
+
+        <div class="firma">
+            <br><br><br>
+            <p class="nombre">{{nombreDirectora}}</p>
+            <p>Directora</p>
+        </div>
+    </div>
+</body>
+</html>

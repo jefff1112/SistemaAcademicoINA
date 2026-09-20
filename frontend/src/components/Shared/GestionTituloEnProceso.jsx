@@ -52,6 +52,7 @@ const GestionTituloEnProceso = () => {
             idEstudiante: '',
             idClase: ''
         }));
+        setBusquedaEstudiante('');
     };
 
     const formatosTituloProceso = [
@@ -61,7 +62,7 @@ const GestionTituloEnProceso = () => {
 
     const generarTituloProceso = async () => {
         const { modo, idEstudiante, idClase, formato } = tituloProceso;
-        
+
         if (modo === 'estudiante' && !idEstudiante) {
             mostrarMensaje('Seleccione un estudiante', 'error');
             return;
@@ -82,7 +83,7 @@ const GestionTituloEnProceso = () => {
                 const url = window.URL.createObjectURL(new Blob([res.data]));
                 const link = document.createElement('a');
                 link.href = url;
-                const nombreArchivo = formato === 'pdf' 
+                const nombreArchivo = formato === 'pdf'
                     ? `titulo_en_proceso_${idEstudiante}.pdf`
                     : `titulo_en_proceso_${idEstudiante}.docx`;
                 link.setAttribute('download', nombreArchivo);
@@ -108,7 +109,21 @@ const GestionTituloEnProceso = () => {
                     mostrarMensaje(`Título en Proceso por clase generado en ${formato.toUpperCase()} (documento combinado, 1 página por estudiante)`, 'success');
                 } catch (err) {
                     console.error('Error generando por clase:', err);
-                    mostrarMensaje(err.response?.data?.mensaje || 'Error al generar por clase', 'error');
+                    // Mejorar el manejo de errores para leer el blob de error
+                    if (err.response?.data instanceof Blob) {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            try {
+                                const errorData = JSON.parse(reader.result);
+                                mostrarMensaje(errorData.mensaje || 'Error al generar por clase', 'error');
+                            } catch (e) {
+                                mostrarMensaje('Error al generar por clase', 'error');
+                            }
+                        };
+                        reader.readAsText(err.response.data);
+                    } else {
+                        mostrarMensaje(err.response?.data?.mensaje || 'Error al generar por clase', 'error');
+                    }
                 }
             }
         } catch (error) {
@@ -164,7 +179,7 @@ const GestionTituloEnProceso = () => {
 
                 <div className="tp-card tp-card-titulo">
                     <h3>Título en Proceso</h3>
-                    <p style={{color: '#64748b', fontSize: '13px', marginBottom: '16px'}}>
+                    <p style={{ color: '#64748b', fontSize: '13px', marginBottom: '16px' }}>
                         Generar constancia de título en trámite para un estudiante específico o para toda una clase.
                     </p>
 
@@ -192,11 +207,16 @@ const GestionTituloEnProceso = () => {
                     </div>
 
                     <div className="tp-grid">
+                        {/* SELECTOR DE CLASE - ÚNICO, SIEMPRE VISIBLE */}
                         <div className="tp-field">
                             <label>Clase</label>
-                            <select 
-                                value={tituloProceso.idClase} 
-                                onChange={(e) => setTituloProceso(prev => ({ ...prev, idClase: e.target.value, idEstudiante: '' }))}
+                            <select
+                                value={tituloProceso.idClase}
+                                onChange={(e) => setTituloProceso(prev => ({
+                                    ...prev,
+                                    idClase: e.target.value,
+                                    idEstudiante: '' // Resetear estudiante al cambiar clase
+                                }))}
                             >
                                 <option value="">Seleccione una clase</option>
                                 {clases.map(c => (
@@ -207,44 +227,32 @@ const GestionTituloEnProceso = () => {
                             </select>
                         </div>
 
-                        <div className="tp-field" style={{ display: (tituloProceso.modo === 'estudiante' && tituloProceso.idClase) ? 'block' : 'none' }}>
-                            <label>Estudiante</label>
-                            <input
-                                type="text"
-                                placeholder="Buscar por nombre, código o NIE..."
-                                value={busquedaEstudiante}
-                                onChange={(e) => setBusquedaEstudiante(e.target.value)}
-                                style={{ marginBottom: '6px' }}
-                            />
-                            <select 
-                                value={tituloProceso.idEstudiante} 
-                                onChange={(e) => setTituloProceso(prev => ({ ...prev, idEstudiante: e.target.value }))}
-                                disabled={tituloProceso.modo !== 'estudiante' || !tituloProceso.idClase}
-                            >
-                                <option value="">Seleccione un estudiante</option>
-                                {estudiantesTitulo.map(e => (
-                                    <option key={e.idEstudiante} value={e.idEstudiante}>
-                                        {e.nombres} {e.apellidos} - {e.codigoEstudiante} - {e.nie}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-
-                        <div className="tp-field" style={{ display: tituloProceso.modo === 'clase' ? 'block' : 'none' }}>
-                            <label>Clase</label>
-                            <select 
-                                value={tituloProceso.idClase} 
-                                onChange={(e) => setTituloProceso(prev => ({ ...prev, idClase: e.target.value }))}
-                                disabled={tituloProceso.modo !== 'clase'}
-                            >
-                                <option value="">Seleccione una clase</option>
-                                {clases.map(c => (
-                                    <option key={c.idClase} value={c.idClase}>
-                                        {c.nombreClase} (Sección {c.seccion}) - {c.anioLectivo}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
+                        {/* SELECTOR DE ESTUDIANTE - SOLO VISIBLE EN MODO 'estudiante' */}
+                        {tituloProceso.modo === 'estudiante' && (
+                            <div className="tp-field">
+                                <label>Estudiante</label>
+                                <input
+                                    type="text"
+                                    placeholder="Buscar por nombre, código o NIE..."
+                                    value={busquedaEstudiante}
+                                    onChange={(e) => setBusquedaEstudiante(e.target.value)}
+                                    style={{ marginBottom: '6px' }}
+                                    disabled={!tituloProceso.idClase}
+                                />
+                                <select
+                                    value={tituloProceso.idEstudiante}
+                                    onChange={(e) => setTituloProceso(prev => ({ ...prev, idEstudiante: e.target.value }))}
+                                    disabled={!tituloProceso.idClase}
+                                >
+                                    <option value="">Seleccione un estudiante</option>
+                                    {estudiantesTitulo.map(e => (
+                                        <option key={e.idEstudiante} value={e.idEstudiante}>
+                                            {e.nombres} {e.apellidos} - {e.codigoEstudiante} - {e.nie}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
 
                         <div className="tp-field">
                             <label>Formato de salida</label>
@@ -257,15 +265,15 @@ const GestionTituloEnProceso = () => {
                     </div>
 
                     <div className="tp-actions">
-                        <button 
-                            className="tp-btn-primary" 
-                            onClick={generarTituloProceso} 
+                        <button
+                            className="tp-btn-primary"
+                            onClick={generarTituloProceso}
                             disabled={generandoTitulo || (tituloProceso.modo === 'estudiante' && !tituloProceso.idEstudiante) || (tituloProceso.modo === 'clase' && !tituloProceso.idClase)}
                         >
                             {generandoTitulo ? 'Generando...' : `Generar ${tituloProceso.formato.toUpperCase()}`}
                         </button>
                         <small style={{ display: 'block', marginTop: '8px', color: '#64748b', fontSize: '12px' }}>
-                            {tituloProceso.modo === 'estudiante' 
+                            {tituloProceso.modo === 'estudiante'
                                 ? 'Genera constancia individual para el estudiante seleccionado'
                                 : 'Genera constancias para todos los estudiantes de la clase seleccionada (documento combinado, 1 página por estudiante)'}
                         </small>

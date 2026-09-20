@@ -28,6 +28,9 @@ public class DocumentoService
         _env = env;
     }
 
+    // ============================================================
+    // MÉTODO GENÉRICO: Genera constancias (Estudio/Conducta/Incapacidad)
+    // ============================================================
     public async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarDocumentoAsync(
         FormatoDocumento formato,
         string nombreEstudiante,
@@ -66,6 +69,9 @@ public class DocumentoService
         };
     }
 
+    // ============================================================
+    // PDF INDIVIDUAL (Constancias)
+    // ============================================================
     private async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarPdfAsync(
         Dictionary<string, string> reemplazos, string codigoEstudiante)
     {
@@ -120,6 +126,9 @@ public class DocumentoService
         return (pdfBytes, $"constancia_{codigoEstudiante}.pdf", "application/pdf");
     }
 
+    // ============================================================
+    // WORD INDIVIDUAL (Constancias)
+    // ============================================================
     private async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarWordAsync(
         Dictionary<string, string> reemplazos, string codigoEstudiante)
     {
@@ -155,37 +164,9 @@ public class DocumentoService
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     }
 
-    private void ReplaceTextInParagraphs(IEnumerable<Paragraph> paragraphs, Dictionary<string, string> reemplazos)
-    {
-        foreach (var paragraph in paragraphs)
-        {
-            foreach (var run in paragraph.Descendants<Run>())
-            {
-                foreach (var text in run.Descendants<Text>())
-                {
-                    var originalText = text.Text;
-                    var newText = originalText;
-
-                    foreach (var kvp in reemplazos)
-                    {
-                        var placeholder = "{{" + kvp.Key + "}}";
-                        var placeholderWithSpaces = "{{ " + kvp.Key + " }}";
-                        var placeholderWithExtraSpaces = "{{  " + kvp.Key + "  }}";
-
-                        newText = newText.Replace(placeholder, kvp.Value ?? "");
-                        newText = newText.Replace(placeholderWithSpaces, kvp.Value ?? "");
-                        newText = newText.Replace(placeholderWithExtraSpaces, kvp.Value ?? "");
-                    }
-
-                    if (newText != originalText)
-                    {
-                        text.Text = newText;
-                    }
-                }
-            }
-        }
-    }
-
+    // ============================================================
+    // EXCEL (Constancias)
+    // ============================================================
     private async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarExcelAsync(
         Dictionary<string, string> reemplazos, string codigoEstudiante)
     {
@@ -240,9 +221,43 @@ public class DocumentoService
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     }
 
-    // -------------------------------------------------------
-    // CORREGIDO: Generar Word combinado
-    // -------------------------------------------------------
+    // ============================================================
+    // MÉTODO AUXILIAR: Reemplazo de texto en párrafos Word
+    // ============================================================
+    private void ReplaceTextInParagraphs(IEnumerable<Paragraph> paragraphs, Dictionary<string, string> reemplazos)
+    {
+        foreach (var paragraph in paragraphs)
+        {
+            foreach (var run in paragraph.Descendants<Run>())
+            {
+                foreach (var text in run.Descendants<Text>())
+                {
+                    var originalText = text.Text;
+                    var newText = originalText;
+
+                    foreach (var kvp in reemplazos)
+                    {
+                        var placeholder = "{{" + kvp.Key + "}}";
+                        var placeholderWithSpaces = "{{ " + kvp.Key + " }}";
+                        var placeholderWithExtraSpaces = "{{  " + kvp.Key + "  }}";
+
+                        newText = newText.Replace(placeholder, kvp.Value ?? "");
+                        newText = newText.Replace(placeholderWithSpaces, kvp.Value ?? "");
+                        newText = newText.Replace(placeholderWithExtraSpaces, kvp.Value ?? "");
+                    }
+
+                    if (newText != originalText)
+                    {
+                        text.Text = newText;
+                    }
+                }
+            }
+        }
+    }
+
+    // ============================================================
+    // TÍTULO EN PROCESO - WORD COMBINADO (múltiples estudiantes)
+    // ============================================================
     public async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarWordCombinadoTituloProcesoAsync(
         List<Dictionary<string, string>> listaReemplazos, int idClase)
     {
@@ -264,7 +279,6 @@ public class DocumentoService
             AddStylesFromTemplate(mainPart, templateBytes);
             CopyHeaderFromTemplate(mainPart, templateBytes);
 
-            // Se construye el cuerpo del documento iterando aquí dentro
             bool first = true;
             foreach (var reemplazos in listaReemplazos)
             {
@@ -277,7 +291,6 @@ public class DocumentoService
                 BuildStudentContent(body, reemplazos);
             }
 
-            // Se agrega la sección al final
             body.Append(new SectionProperties(
                 new HeaderReference() { Type = HeaderFooterValues.Default, Id = "rId6" },
                 new PageSize() { Width = 12240, Height = 15840 },
@@ -291,6 +304,71 @@ public class DocumentoService
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
     }
 
+    // ============================================================
+    // TÍTULO EN PROCESO - PDF COMBINADO
+    // ============================================================
+    public async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarPdfCombinadoTituloProcesoAsync(
+        List<Dictionary<string, string>> listaReemplazos, int idClase)
+    {
+        var templatePath = Path.Combine(_env.ContentRootPath, "Plantillas", "HTML", "PlantillaHTMLConstanciaTituloEnProceso.html");
+
+        if (!File.Exists(templatePath))
+            throw new FileNotFoundException($"No se encontró la plantilla HTML en: {templatePath}");
+
+        var htmlTemplate = await File.ReadAllTextAsync(templatePath);
+
+        var logoPath = Path.Combine(_env.WebRootPath, "images", "logo-ina.png");
+        string logoDataUri = "";
+        if (File.Exists(logoPath))
+        {
+            var logoBytes = await File.ReadAllBytesAsync(logoPath);
+            var base64 = Convert.ToBase64String(logoBytes);
+            logoDataUri = $"data:image/png;base64,{base64}";
+        }
+
+        var allHtml = "";
+        foreach (var reemplazos in listaReemplazos)
+        {
+            var html = htmlTemplate;
+            foreach (var kvp in reemplazos)
+            {
+                html = html.Replace($"{{{{{kvp.Key}}}}}", kvp.Value);
+            }
+            if (!reemplazos.ContainsKey("logoUrl"))
+            {
+                html = html.Replace("{{logoUrl}}", logoDataUri != "" ? logoDataUri : "/images/logo-ina.png");
+            }
+            allHtml += html + "<div style='page-break-after: always;'></div>";
+        }
+
+        await using var browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+        {
+            Headless = true,
+            Args = new[] { "--no-sandbox", "--disable-setuid-sandbox" }
+        });
+
+        await using var page = await browser.NewPageAsync();
+        await page.SetContentAsync(allHtml, new PageSetContentOptions { WaitUntil = WaitUntilState.NetworkIdle });
+
+        var pdfBytes = await page.PdfAsync(new PagePdfOptions
+        {
+            Format = "Letter",
+            PrintBackground = true,
+            Margin = new()
+            {
+                Top = "20mm",
+                Bottom = "20mm",
+                Left = "20mm",
+                Right = "20mm"
+            }
+        });
+
+        return (pdfBytes, $"titulo_proceso_clase_{idClase}.pdf", "application/pdf");
+    }
+
+    // ============================================================
+    // HELPERS PARA WORD
+    // ============================================================
     private void AddStylesFromTemplate(MainDocumentPart mainPart, byte[] templateBytes)
     {
         using var templateMs = new MemoryStream(templateBytes);
@@ -381,9 +459,7 @@ public class DocumentoService
             CreateRun("” conducta. Se iniciará el proceso de trámite de legalización de título en el Ministerio de Educación.")
         ));
 
-        body.Append(new Paragraph(
-            CreateRun("  ")
-        ));
+        body.Append(new Paragraph(CreateRun("  ")));
 
         body.Append(new Paragraph(
             CreateRun("Y, para los usos que el interesado estime conveniente se extiende la presente en la Ciudad de Apopa a los "),
@@ -395,9 +471,7 @@ public class DocumentoService
             CreateRun(".")
         ));
 
-        body.Append(new Paragraph(
-            CreateRun("  ")
-        ));
+        body.Append(new Paragraph(CreateRun("  ")));
 
         body.Append(new Paragraph(
             new ParagraphProperties(
@@ -420,13 +494,110 @@ public class DocumentoService
         ));
     }
 
-    // -------------------------------------------------------
-    // CORREGIDO: Generar PDF combinado (con validación de plantilla)
-    // -------------------------------------------------------
-    public async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarPdfCombinadoTituloProcesoAsync(
+    // ============================================================
+    // CERTIFICADO DE PROMOCIÓN - PDF INDIVIDUAL
+    // ============================================================
+    public async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarCertificadoPromocionAsync(
+        FormatoDocumento formato,
+        Dictionary<string, string> reemplazos,
+        string codigoEstudiante)
+    {
+        if (formato == FormatoDocumento.Pdf)
+        {
+            return await GenerarPdfCertificadoPromocionAsync(reemplazos, codigoEstudiante);
+        }
+        else if (formato == FormatoDocumento.Word)
+        {
+            return await GenerarWordCertificadoPromocionAsync(reemplazos, codigoEstudiante);
+        }
+        throw new ArgumentException($"Formato no soportado: {formato}");
+    }
+
+    private async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarPdfCertificadoPromocionAsync(
+        Dictionary<string, string> reemplazos, string codigoEstudiante)
+    {
+        var templatePath = Path.Combine(_env.ContentRootPath, "Plantillas", "HTML", "PlantillaHTMLCertificadoPromocion.html");
+
+        if (!File.Exists(templatePath))
+            throw new FileNotFoundException($"No se encontró la plantilla HTML en: {templatePath}");
+
+        var html = await File.ReadAllTextAsync(templatePath);
+
+        var logoPath = Path.Combine(_env.WebRootPath, "images", "logo-ina.png");
+        string logoDataUri = "";
+        if (File.Exists(logoPath))
+        {
+            var logoBytes = await File.ReadAllBytesAsync(logoPath);
+            var base64 = Convert.ToBase64String(logoBytes);
+            logoDataUri = $"data:image/png;base64,{base64}";
+        }
+
+        if (!reemplazos.ContainsKey("logoUrl"))
+            reemplazos["logoUrl"] = logoDataUri != "" ? logoDataUri : "/images/logo-ina.png";
+
+        foreach (var kvp in reemplazos)
+        {
+            html = html.Replace($"{{{{{kvp.Key}}}}}", kvp.Value);
+        }
+
+        await using var browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+        {
+            Headless = true,
+            Args = new[] { "--no-sandbox", "--disable-setuid-sandbox" }
+        });
+
+        await using var page = await browser.NewPageAsync();
+        await page.SetContentAsync(html, new PageSetContentOptions { WaitUntil = WaitUntilState.NetworkIdle });
+
+        var pdfBytes = await page.PdfAsync(new PagePdfOptions
+        {
+            Format = "Letter",
+            PrintBackground = true,
+            Margin = new() { Top = "20mm", Bottom = "20mm", Left = "20mm", Right = "20mm" }
+        });
+
+        return (pdfBytes, $"certificado_promocion_{codigoEstudiante}.pdf", "application/pdf");
+    }
+
+    private async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarWordCertificadoPromocionAsync(
+        Dictionary<string, string> reemplazos, string codigoEstudiante)
+    {
+        var templatePath = Path.Combine(_env.ContentRootPath, "Plantillas", "Word", "PlantillaCertificadoPromocion.docx");
+
+        if (!File.Exists(templatePath))
+            throw new FileNotFoundException($"No se encontró la plantilla Word en: {templatePath}");
+
+        var bytes = await File.ReadAllBytesAsync(templatePath);
+        using var ms = new MemoryStream(bytes);
+        ms.Position = 0;
+
+        using (var doc = WordprocessingDocument.Open(ms, true))
+        {
+            var body = doc.MainDocumentPart?.Document.Body;
+            if (body != null)
+            {
+                ReplaceTextInParagraphs(body.Descendants<Paragraph>(), reemplazos);
+                foreach (var table in body.Descendants<Table>())
+                {
+                    foreach (var cell in table.Descendants<TableCell>())
+                    {
+                        ReplaceTextInParagraphs(cell.Descendants<Paragraph>(), reemplazos);
+                    }
+                }
+            }
+        }
+
+        return (ms.ToArray(), $"certificado_promocion_{codigoEstudiante}.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    }
+
+    // ============================================================
+    // CERTIFICADO DE PROMOCIÓN - PDF COMBINADO (por clase)
+    // ============================================================
+    public async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarPdfCombinadoCertificadoPromocionAsync(
         List<Dictionary<string, string>> listaReemplazos, int idClase)
     {
-        var templatePath = Path.Combine(_env.ContentRootPath, "Plantillas", "HTML", "PlantillaHTMLConstanciaTituloEnProceso.html");
+        var templatePath = Path.Combine(_env.ContentRootPath, "Plantillas", "HTML", "PlantillaHTMLCertificadoPromocion.html");
 
         if (!File.Exists(templatePath))
             throw new FileNotFoundException($"No se encontró la plantilla HTML en: {templatePath}");
@@ -451,9 +622,8 @@ public class DocumentoService
                 html = html.Replace($"{{{{{kvp.Key}}}}}", kvp.Value);
             }
             if (!reemplazos.ContainsKey("logoUrl"))
-            {
                 html = html.Replace("{{logoUrl}}", logoDataUri != "" ? logoDataUri : "/images/logo-ina.png");
-            }
+
             allHtml += html + "<div style='page-break-after: always;'></div>";
         }
 
@@ -470,15 +640,239 @@ public class DocumentoService
         {
             Format = "Letter",
             PrintBackground = true,
-            Margin = new()
-            {
-                Top = "20mm",
-                Bottom = "20mm",
-                Left = "20mm",
-                Right = "20mm"
-            }
+            Margin = new() { Top = "20mm", Bottom = "20mm", Left = "20mm", Right = "20mm" }
         });
 
-        return (pdfBytes, $"titulo_proceso_clase_{idClase}.pdf", "application/pdf");
+        return (pdfBytes, $"certificados_promocion_clase_{idClase}.pdf", "application/pdf");
+    }
+
+    // ============================================================
+    // CERTIFICADO DE PROMOCIÓN - WORD COMBINADO (por clase)
+    // ============================================================
+    public async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarWordCombinadoCertificadoPromocionAsync(
+        List<Dictionary<string, string>> listaReemplazos, int idClase)
+    {
+        var templatePath = Path.Combine(_env.ContentRootPath, "Plantillas", "Word", "PlantillaCertificadoPromocion.docx");
+
+        if (!File.Exists(templatePath))
+            throw new FileNotFoundException($"No se encontró la plantilla Word en: {templatePath}");
+
+        var templateBytes = await File.ReadAllBytesAsync(templatePath);
+
+        using var ms = new MemoryStream();
+
+        using (var doc = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document))
+        {
+            var mainPart = doc.AddMainDocumentPart();
+            mainPart.Document = new Document(new Body());
+            var body = mainPart.Document.Body;
+
+            AddStylesFromTemplate(mainPart, templateBytes);
+            CopyHeaderFromTemplate(mainPart, templateBytes);
+
+            bool first = true;
+            foreach (var reemplazos in listaReemplazos)
+            {
+                if (!first)
+                    body.Append(new Paragraph(new Run(new Break() { Type = BreakValues.Page })));
+                first = false;
+
+                BuildCertificadoPromocionContent(body, reemplazos);
+            }
+
+            body.Append(new SectionProperties(
+                new HeaderReference() { Type = HeaderFooterValues.Default, Id = "rId6" },
+                new PageSize() { Width = 12240, Height = 15840 },
+                new PageMargin() { Top = 1417, Right = 1701, Bottom = 1417, Left = 1701, Header = 708, Footer = 708, Gutter = 0 },
+                new Columns() { Space = new StringValue("708") },
+                new DocGrid() { LinePitch = 360 }
+            ));
+        }
+
+        return (ms.ToArray(), $"certificados_promocion_clase_{idClase}.docx",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    }
+
+    private void BuildCertificadoPromocionContent(Body body, Dictionary<string, string> r)
+    {
+        // Título
+        body.Append(new Paragraph(
+            new ParagraphProperties(new Justification() { Val = JustificationValues.Center }),
+            CreateRun("INSTITUTO NACIONAL DE APOPA", bold: true, fontSize: "32")
+        ));
+
+        body.Append(new Paragraph(
+            new ParagraphProperties(new Justification() { Val = JustificationValues.Center }),
+            CreateRun("CERTIFICADO DE PROMOCIÓN", bold: true, fontSize: "28")
+        ));
+
+        body.Append(new Paragraph(CreateRun(" ")));
+
+        // Cuerpo
+        body.Append(new Paragraph(
+            new ParagraphProperties(new Justification() { Val = JustificationValues.Both }),
+            CreateRun("El suscrito Director del Instituto Nacional de Apopa, HACE CONSTAR QUE: ")
+        ));
+
+        body.Append(new Paragraph(
+            new ParagraphProperties(new Justification() { Val = JustificationValues.Both }),
+            CreateRun(r.GetValueOrDefault("nombreEstudiante", ""), bold: true, noProof: true),
+            CreateRun(", con código de estudiante "),
+            CreateRun(r.GetValueOrDefault("codigoEstudiante", ""), noProof: true),
+            CreateRun(" y NIE "),
+            CreateRun(r.GetValueOrDefault("nie", ""), noProof: true),
+            CreateRun(", ha cursado y aprobado el "),
+            CreateRun(r.GetValueOrDefault("nivelBachillerato", ""), noProof: true),
+            CreateRun(" BACHILLERATO TÉCNICO VOCACIONAL EN "),
+            CreateRun(r.GetValueOrDefault("especialidad", ""), noProof: true),
+            CreateRun(", SECCIÓN \""),
+            CreateRun(r.GetValueOrDefault("seccion", ""), noProof: true),
+            CreateRun("\", durante el año lectivo "),
+            CreateRun(r.GetValueOrDefault("anioLectivo", ""), noProof: true),
+            CreateRun(".")
+        ));
+
+        body.Append(new Paragraph(CreateRun(" ")));
+
+        // Datos académicos
+        body.Append(new Paragraph(
+            new ParagraphProperties(new Justification() { Val = JustificationValues.Left }),
+            CreateRun("Promedio General: ", bold: true),
+            CreateRun(r.GetValueOrDefault("promedioGeneral", "0.00"), noProof: true)
+        ));
+
+        body.Append(new Paragraph(
+            new ParagraphProperties(new Justification() { Val = JustificationValues.Left }),
+            CreateRun("Materias Aprobadas: ", bold: true),
+            CreateRun(r.GetValueOrDefault("materiasAprobadas", "0"), noProof: true)
+        ));
+
+        body.Append(new Paragraph(
+            new ParagraphProperties(new Justification() { Val = JustificationValues.Left }),
+            CreateRun("Materias Reprobadas: ", bold: true),
+            CreateRun(r.GetValueOrDefault("materiasReprobadas", "0"), noProof: true)
+        ));
+
+        body.Append(new Paragraph(
+            new ParagraphProperties(new Justification() { Val = JustificationValues.Left }),
+            CreateRun("Estado: ", bold: true),
+            CreateRun(r.GetValueOrDefault("estado", "NO PROMOVIDO"), bold: true, noProof: true)
+        ));
+
+        body.Append(new Paragraph(CreateRun(" ")));
+
+        // Cierre
+        body.Append(new Paragraph(
+            new ParagraphProperties(new Justification() { Val = JustificationValues.Both }),
+            CreateRun("Y, para los usos que el interesado estime conveniente se extiende la presente en la Ciudad de Apopa a los "),
+            CreateRun(r.GetValueOrDefault("dia", ""), noProof: true),
+            CreateRun(" días del mes de "),
+            CreateRun(r.GetValueOrDefault("mes", ""), noProof: true),
+            CreateRun(" de "),
+            CreateRun(r.GetValueOrDefault("anio", ""), noProof: true),
+            CreateRun(".")
+        ));
+
+        body.Append(new Paragraph(CreateRun(" ")));
+        body.Append(new Paragraph(CreateRun(" ")));
+
+        // Firma
+        body.Append(new Paragraph(
+            new ParagraphProperties(new Justification() { Val = JustificationValues.Center }),
+            CreateRun(r.GetValueOrDefault("nombreDirectora", ""))
+        ));
+
+        body.Append(new Paragraph(
+            new ParagraphProperties(new Justification() { Val = JustificationValues.Center }),
+            CreateRun("Directora", fontFamily: "Arial", fontSize: "28")
+        ));
+    }
+    // ============================================================
+    // PUBLICACIÓN DE RESULTADOS - PDF
+    // ============================================================
+    public async Task<(byte[] contenido, string nombreArchivo, string mimeType)> GenerarPdfPublicacionResultadosAsync(
+        List<Dictionary<string, string>> aspirantes,
+        string nombreEspecialidad,
+        int totalAspirantes,
+        int aprobados,
+        int rechazados,
+        int enEspera,
+        int preseleccionados)
+    {
+        var templatePath = Path.Combine(_env.ContentRootPath, "Plantillas", "HTML", "PlantillaHTMLPublicacionResultados.html");
+
+        if (!File.Exists(templatePath))
+            throw new FileNotFoundException($"No se encontró la plantilla HTML en: {templatePath}");
+
+        var html = await File.ReadAllTextAsync(templatePath);
+
+        // Logo en base64
+        var logoPath = Path.Combine(_env.WebRootPath, "images", "logo-ina.png");
+        string logoDataUri = "";
+        if (File.Exists(logoPath))
+        {
+            var logoBytes = await File.ReadAllBytesAsync(logoPath);
+            var base64 = Convert.ToBase64String(logoBytes);
+            logoDataUri = $"data:image/png;base64,{base64}";
+        }
+        html = html.Replace("{{logoUrl}}", logoDataUri);
+
+        // Generar filas de la tabla
+        var filasHtml = new System.Text.StringBuilder();
+        foreach (var asp in aspirantes)
+        {
+            var estadoColor = asp.GetValueOrDefault("estado", "") switch
+            {
+                "Aprobado" => "#16a34a",
+                "Rechazado" => "#dc2626",
+                "En Espera" => "#e67e22",
+                "Preseleccionado" => "#3b82f6",
+                _ => "#64748b"
+            };
+
+            filasHtml.Append($@"
+            <tr>
+                <td style='text-align:center;'>{asp.GetValueOrDefault("id", "")}</td>
+                <td>{asp.GetValueOrDefault("nombres", "")}</td>
+                <td>{asp.GetValueOrDefault("apellidos", "")}</td>
+                <td style='text-align:center;'>{asp.GetValueOrDefault("nie", "-")}</td>
+                <td>{asp.GetValueOrDefault("especialidad", "-")}</td>
+                <td style='text-align:center;'>{asp.GetValueOrDefault("nota", "-")}</td>
+                <td style='text-align:center;'>
+                    <span style='background:{estadoColor};color:#fff;padding:3px 10px;border-radius:10px;font-size:11px;font-weight:bold;'>
+                        {asp.GetValueOrDefault("estado", "Pendiente")}
+                    </span>
+                </td>
+            </tr>");
+        }
+
+        html = html.Replace("{{filasAspirantes}}", filasHtml.ToString());
+        html = html.Replace("{{nombreEspecialidad}}", nombreEspecialidad);
+        html = html.Replace("{{totalAspirantes}}", totalAspirantes.ToString());
+        html = html.Replace("{{aprobados}}", aprobados.ToString());
+        html = html.Replace("{{rechazados}}", rechazados.ToString());
+        html = html.Replace("{{enEspera}}", enEspera.ToString());
+        html = html.Replace("{{preseleccionados}}", preseleccionados.ToString());
+        html = html.Replace("{{fechaGeneracion}}", DateTime.Now.ToString("dd/MM/yyyy HH:mm"));
+        html = html.Replace("{{anioLectivo}}", DateTime.Now.Year.ToString());
+
+        await using var browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions
+        {
+            Headless = true,
+            Args = new[] { "--no-sandbox", "--disable-setuid-sandbox" }
+        });
+
+        await using var page = await browser.NewPageAsync();
+        await page.SetContentAsync(html, new PageSetContentOptions { WaitUntil = WaitUntilState.NetworkIdle });
+
+        var pdfBytes = await page.PdfAsync(new PagePdfOptions
+        {
+            Format = "Letter",
+            PrintBackground = true,
+            Margin = new() { Top = "15mm", Bottom = "15mm", Left = "15mm", Right = "15mm" }
+        });
+
+        var nombreArchivo = $"publicacion_resultados_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+        return (pdfBytes, nombreArchivo, "application/pdf");
     }
 }

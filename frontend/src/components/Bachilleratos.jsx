@@ -1,152 +1,88 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import API from '../services/api';
+
+// Datos hardcodeados por defecto (fallback)
+const CARRERAS_DEFAULT = {
+    software: {
+        name: 'Desarrollo de Software',
+        duration: '3 años',
+        description: 'En este bachillerato recibirás formación técnica necesaria para desarrollar aplicaciones de escritorio, intranet, web y dispositivos móviles. También obtendrás los conocimientos necesarios para la Administración de Bases de Datos relacionales.',
+        subjects: ['Programacion I, II, III', 'Base de Datos I y II', 'Estructura de Datos', 'Ingenieria de Software', 'Aplicaciones Web', 'Aplicaciones Moviles', 'Redes y Comunicaciones', 'Mantenimiento de Computadoras', 'Logica de Programacion', 'Diseño UML', 'Matematicas', 'Ingles Tecnico', 'Lenguaje y Literatura'],
+        skills: ['Analizar los requerimientos de clientes para desarrollar sistemas', 'Desarrollo de Logica de programacion', 'Diseñar soluciones informaticas utilizando UML', 'Administrar bases de datos relacionales', 'Desarrollar aplicaciones web con Python, Java, C#', 'Frameworks: Angular, React, JavaScript/TypeScript', 'Diseñar y configurar redes virtuales', 'Elaborar manuales de usuarios con normas ISO e ITIL', 'Implementar buenas practicas de desarrollo de software', 'Competencias en tecnologias emergentes: IA, realidad virtual, impresion 3D'],
+        jobs: ['Soporte para mantenimiento de aplicaciones', 'Desarrollador de sitios y aplicaciones Web', 'Diseñador de Sistemas', 'Diseñador y Administrador de Base de datos', 'Instalador y configurador de Redes LAN', 'Tecnico de Aseguramiento de Calidad', 'Cloud Computing', 'Documentador de Sistemas', 'Ventas de soluciones de Software']
+    },
+    electronica: {
+        name: 'Electronica',
+        duration: '3 años',
+        description: 'El Bachiller Tecnico en Electronica egresa como persona de solida formacion Tecnica y Humana que le permite insertarse en la vida laboral, ser agente productivo del pais y promover su desarrollo personal.',
+        subjects: ['Dispositivos Electronicos', 'Circuitos Resistivos en CD', 'Semiconductores Lineales', 'Circuitos Integrados', 'Circuitos Digitales', 'Microcontroladores', 'Control Electronico de Motores', 'Maquinas Electricas Estaticas', 'Instrumentacion Electronica', 'Robotica', 'Matematicas', 'Ingles Tecnico'],
+        skills: ['Estudio de dispositivos electronicos', 'Analisis de circuitos resistivos en corriente directa', 'Analisis de Semiconductores lineales', 'Estudio de circuitos integrados', 'Aplicacion de circuitos digitales', 'Programacion de microcontroladores', 'Control electronico de motores', 'Mantenimiento de equipos electronicos'],
+        jobs: ['Mantenimiento electronico de circuitos', 'Industria de procesos automatizados', 'Reparacion de equipos electronicos', 'Instalacion de sistemas electronicos', 'Tecnico en robotica']
+    },
+    contable: {
+        name: 'Administrativo Contable',
+        duration: '3 años',
+        description: 'Competencias y Oportunidades que lograra con el Bachillerato Tecnico Vocacional Administrativo Contable.',
+        subjects: ['Contabilidad I, II, III', 'Administracion I y II', 'Legislacion Laboral', 'Legislacion Tributaria', 'Matematica Financiera', 'Economia', 'Gestion de Compras', 'Analisis Financieros', 'Calculo de Costos', 'Emprendedurismo', 'Ingles para Contabilidad', 'Lenguaje y Literatura'],
+        skills: ['Manejo de informacion y registro contable', 'Organizacion de archivos electronicos', 'Gestion de procesos y control interno', 'Interpretacion en ingles de contabilidad', 'Diseño de planes de negocios', 'Registro de estados financieros', 'Tecnicas para administracion de recursos humanos', 'Procesos para creacion de microempresas'],
+        jobs: ['Asistente Contable', 'Asistente Administrativo', 'Cajero', 'Planillero', 'Asistente de Recursos Humanos', 'Ejecutivo de Ventas', 'Gerente de su propia empresa', 'Operador de Call Center', 'Asistente de Compras', 'Recepcionista']
+    },
+    salud: {
+        name: 'Atencion Primaria en Salud',
+        duration: '3 años',
+        description: 'El Tecnico en Atencion Primaria en Salud es un Tecnico de nivel medio preparado para incorporarse a los procesos de promocion de la salud, Organizacion Comunitaria y Actividades de Administracion de la Salud.',
+        subjects: ['Anatomia y Fisiologia', 'Primeros Auxilios', 'Enfermeria Basica', 'Salud Publica', 'Nutricion', 'Farmacologia Basica', 'Promocion de la Salud', 'Salud Mental', 'Prevencion de Desastres', 'Vigilancia Epidemiologica', 'Matematicas', 'Ingles Tecnico'],
+        skills: ['Promocion de la salud y organizacion comunitaria', 'Vigilancia Epidemiologica', 'Primeros Auxilios en emergencias', 'Prevencion de desastres', 'Cuidados basicos en salud', 'Apoyo en servicios de salud'],
+        jobs: ['Promotor Comunitario de Salud', 'Asistente de cuidados en salud', 'Asistente Tecnico en Laboratorio Clinico', 'Asistente en Radiologia, Farmacia, Odontologia', 'Promotor de Salud Ambiental', 'Gestor del desarrollo local']
+    },
+    general: {
+        name: 'Bachillerato General',
+        duration: '2 años',
+        description: 'Duracion de 2 años y al graduarte podras optar por una carrera universitaria especializada. Obtienes conocimientos generales en todas las asignaturas cientificas.',
+        subjects: ['Matematicas', 'Lenguaje y Literatura', 'Ingles', 'Ciencias Naturales', 'Ciencias Sociales', 'Historia', 'Filosofia', 'Psicologia', 'Educacion Fisica', 'Orientacion', 'Estudios Sociales'],
+        skills: ['Conocimientos generales en todas las asignaturas cientificas', 'Preparacion para asistir a la universidad', 'Competencias basicas para el campo laboral', 'Capacidad de micro-emprendimiento'],
+        jobs: ['Estudios universitarios', 'Sector comercio', 'Industria', 'Micro emprendimiento', 'Servicios']
+    }
+};
 
 const Bachilleratos = () => {
     const [selectedCareer, setSelectedCareer] = useState('software');
+    const [contenidoBD, setContenidoBD] = useState([]);
 
-    const careers = {
-        software: {
-            name: 'Desarrollo de Software',
-            duration: '3 años',
-            description: 'En este bachillerato recibirás formación técnica necesaria para desarrollar aplicaciones de escritorio, intranet, web y dispositivos móviles. También obtendrás los conocimientos necesarios para la Administración de Bases de Datos relacionales.',
-            subjects: [
-                'Programacion I, II, III', 'Base de Datos I y II', 'Estructura de Datos',
-                'Ingenieria de Software', 'Aplicaciones Web', 'Aplicaciones Moviles',
-                'Redes y Comunicaciones', 'Mantenimiento de Computadoras', 'Logica de Programacion',
-                'Diseño UML', 'Matematicas', 'Ingles Tecnico', 'Lenguaje y Literatura'
-            ],
-            skills: [
-                'Analizar los requerimientos de clientes para desarrollar sistemas',
-                'Desarrollo de Logica de programacion',
-                'Diseñar soluciones informaticas utilizando UML',
-                'Administrar bases de datos relacionales',
-                'Desarrollar aplicaciones web con Python, Java, C#',
-                'Frameworks: Angular, React, JavaScript/TypeScript',
-                'Diseñar y configurar redes virtuales',
-                'Elaborar manuales de usuarios con normas ISO e ITIL',
-                'Implementar buenas practicas de desarrollo de software',
-                'Competencias en tecnologias emergentes: IA, realidad virtual, impresion 3D'
-            ],
-            jobs: [
-                'Soporte para mantenimiento de aplicaciones',
-                'Desarrollador de sitios y aplicaciones Web',
-                'Diseñador de Sistemas',
-                'Diseñador y Administrador de Base de datos',
-                'Instalador y configurador de Redes LAN',
-                'Tecnico de Aseguramiento de Calidad',
-                'Cloud Computing',
-                'Documentador de Sistemas',
-                'Ventas de soluciones de Software'
-            ]
-        },
-        electronica: {
-            name: 'Electronica',
-            duration: '3 años',
-            description: 'El Bachiller Tecnico en Electronica egresa como persona de solida formacion Tecnica y Humana que le permite insertarse en la vida laboral, ser agente productivo del pais y promover su desarrollo personal.',
-            subjects: [
-                'Dispositivos Electronicos', 'Circuitos Resistivos en CD', 'Semiconductores Lineales',
-                'Circuitos Integrados', 'Circuitos Digitales', 'Microcontroladores',
-                'Control Electronico de Motores', 'Maquinas Electricas Estaticas',
-                'Instrumentacion Electronica', 'Robotica', 'Matematicas', 'Ingles Tecnico'
-            ],
-            skills: [
-                'Estudio de dispositivos electronicos',
-                'Analisis de circuitos resistivos en corriente directa',
-                'Analisis de Semiconductores lineales',
-                'Estudio de circuitos integrados',
-                'Aplicacion de circuitos digitales',
-                'Programacion de microcontroladores',
-                'Control electronico de motores',
-                'Mantenimiento de equipos electronicos'
-            ],
-            jobs: [
-                'Mantenimiento electronico de circuitos',
-                'Industria de procesos automatizados',
-                'Reparacion de equipos electronicos',
-                'Instalacion de sistemas electronicos',
-                'Tecnico en robotica'
-            ]
-        },
-        contable: {
-            name: 'Administrativo Contable',
-            duration: '3 años',
-            description: 'Competencias y Oportunidades que lograra con el Bachillerato Tecnico Vocacional Administrativo Contable.',
-            subjects: [
-                'Contabilidad I, II, III', 'Administracion I y II', 'Legislacion Laboral',
-                'Legislacion Tributaria', 'Matematica Financiera', 'Economia',
-                'Gestion de Compras', 'Analisis Financieros', 'Calculo de Costos',
-                'Emprendedurismo', 'Ingles para Contabilidad', 'Lenguaje y Literatura'
-            ],
-            skills: [
-                'Manejo de informacion y registro contable',
-                'Organizacion de archivos electronicos',
-                'Gestion de procesos y control interno',
-                'Interpretacion en ingles de contabilidad',
-                'Diseño de planes de negocios',
-                'Registro de estados financieros',
-                'Tecnicas para administracion de recursos humanos',
-                'Procesos para creacion de microempresas'
-            ],
-            jobs: [
-                'Asistente Contable', 'Asistente Administrativo', 'Cajero',
-                'Planillero', 'Asistente de Recursos Humanos', 'Ejecutivo de Ventas',
-                'Gerente de su propia empresa', 'Operador de Call Center',
-                'Asistente de Compras', 'Recepcionista'
-            ]
-        },
-        salud: {
-            name: 'Atencion Primaria en Salud',
-            duration: '3 años',
-            description: 'El Tecnico en Atencion Primaria en Salud es un Tecnico de nivel medio preparado para incorporarse a los procesos de promocion de la salud, Organizacion Comunitaria y Actividades de Administracion de la Salud.',
-            subjects: [
-                'Anatomia y Fisiologia', 'Primeros Auxilios', 'Enfermeria Basica',
-                'Salud Publica', 'Nutricion', 'Farmacologia Basica',
-                'Promocion de la Salud', 'Salud Mental', 'Prevencion de Desastres',
-                'Vigilancia Epidemiologica', 'Matematicas', 'Ingles Tecnico'
-            ],
-            skills: [
-                'Promocion de la salud y organizacion comunitaria',
-                'Vigilancia Epidemiologica',
-                'Primeros Auxilios en emergencias',
-                'Prevencion de desastres',
-                'Cuidados basicos en salud',
-                'Apoyo en servicios de salud'
-            ],
-            jobs: [
-                'Promotor Comunitario de Salud',
-                'Asistente de cuidados en salud',
-                'Asistente Tecnico en Laboratorio Clinico',
-                'Asistente en Radiologia, Farmacia, Odontologia',
-                'Promotor de Salud Ambiental',
-                'Gestor del desarrollo local'
-            ]
-        },
-        general: {
-            name: 'Bachillerato General',
-            duration: '2 años',
-            description: 'Duracion de 2 años y al graduarte podras optar por una carrera universitaria especializada. Obtienes conocimientos generales en todas las asignaturas cientificas.',
-            subjects: [
-                'Matematicas', 'Lenguaje y Literatura', 'Ingles',
-                'Ciencias Naturales', 'Ciencias Sociales', 'Historia',
-                'Filosofia', 'Psicologia', 'Educacion Fisica',
-                'Orientacion', 'Estudios Sociales'
-            ],
-            skills: [
-                'Conocimientos generales en todas las asignaturas cientificas',
-                'Preparacion para asistir a la universidad',
-                'Competencias basicas para el campo laboral',
-                'Capacidad de micro-emprendimiento'
-            ],
-            jobs: [
-                'Estudios universitarios',
-                'Sector comercio',
-                'Industria',
-                'Micro emprendimiento',
-                'Servicios'
-            ]
-        }
+    useEffect(() => {
+        const cargar = async () => {
+            try {
+                const res = await API.get('/contenido-publico/bachilleratos');
+                setContenidoBD(res.data || []);
+            } catch (error) {
+                console.error('Error cargando contenido:', error);
+            }
+        };
+        cargar();
+    }, []);
+
+    // Busca un bloque en la BD por sección
+    const getBD = (seccion, campo, fallback = '') => {
+        const bloque = contenidoBD.find(c => c.seccion === seccion);
+        return bloque?.[campo] || fallback;
     };
 
-    const current = careers[selectedCareer];
+    // Combina los datos hardcodeados con los de la BD
+    const getCarrera = (key) => {
+        const base = CARRERAS_DEFAULT[key];
+        const prefijo = `carrera-${key}`;
+        return {
+            name: getBD(`${prefijo}-nombre`, 'contenido', base.name),
+            duration: getBD(`${prefijo}-duracion`, 'contenido', base.duration),
+            description: getBD(`${prefijo}-descripcion`, 'contenido', base.description),
+            imagenUrl: getBD(`${prefijo}-imagen`, 'imagenUrl', ''),
+            subjects: base.subjects,
+            skills: base.skills,
+            jobs: base.jobs
+        };
+    };
+
+    const current = getCarrera(selectedCareer);
 
     return (
         <div className="page-container">
@@ -167,9 +103,21 @@ const Bachilleratos = () => {
                     <p className="duration">Duracion: {current.duration}</p>
                 </div>
 
+                {/* Imagen de la carrera (si existe) */}
+                {current.imagenUrl && (
+                    <div style={{ textAlign: 'center', margin: '16px 0' }}>
+                        <img
+                            src={current.imagenUrl}
+                            alt={current.name}
+                            style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '12px', objectFit: 'cover' }}
+                            onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                    </div>
+                )}
+
                 <div className="career-description">
                     <h3>Descripcion</h3>
-                    <p>{current.description}</p>
+                    <div dangerouslySetInnerHTML={{ __html: current.description }} />
                 </div>
 
                 <div className="subjects-section">
