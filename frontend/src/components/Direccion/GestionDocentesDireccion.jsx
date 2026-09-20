@@ -1,21 +1,31 @@
-// Componente Gestión de Docentes (Dirección): crea, edita, desactiva docentes y asigna materias.
-import React, { useState, useEffect } from 'react';
+// Componente Gestión de Docentes (Dirección) - MEJORADO
+// Crea, edita, activa/desactiva docentes y asigna materias.
+import React, { useState, useEffect, useMemo } from 'react';
 import DashboardLayout from '../Layout/DashboardLayout';
 import { getDocentes, createDocente, updateDocente, deleteDocente } from '../../services/docentesService';
 import { getMaterias } from '../../services/materiasService';
 import { getClases } from '../../services/clasesService';
 import { getDocenteMateriasByDocente, createDocenteMateria, deleteDocenteMateria } from '../../services/docenteMateriasService';
 
-// Componente principal: administra la planta docente y la asignación de materias por año.
 const GestionDocentesDireccion = () => {
-    // Estados: docentes, modal de edición, búsqueda y datos del formulario.
+    // ============================================================
+    // ESTADOS
+    // ============================================================
     const [docentes, setDocentes] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [selectedDocente, setSelectedDocente] = useState(null);
     const [message, setMessage] = useState('');
     const [messageType, setMessageType] = useState('');
+
+    // Filtros
     const [searchTerm, setSearchTerm] = useState('');
+    const [filterEstado, setFilterEstado] = useState('todos');
+    const [filterTipo, setFilterTipo] = useState('todos');
+    const [filterEspecialidad, setFilterEspecialidad] = useState('todas');
+
+    // Formulario
     const [formData, setFormData] = useState({
         codigoDocente: '',
         nombres: '',
@@ -29,12 +39,12 @@ const GestionDocentesDireccion = () => {
         estado: true
     });
 
-    // Estado para el modal de asignación de materias
-    // Estados del modal de asignación: materias, clases, asignaciones y formulario de asignación.
+    // Modal asignar materias
     const [showAsignarModal, setShowAsignarModal] = useState(false);
     const [materiasList, setMateriasList] = useState([]);
     const [clasesList, setClasesList] = useState([]);
     const [asignaciones, setAsignaciones] = useState([]);
+    const [busquedaMateria, setBusquedaMateria] = useState('');
     const [asignarForm, setAsignarForm] = useState({
         idMateria: '',
         idClase: '',
@@ -44,12 +54,13 @@ const GestionDocentesDireccion = () => {
     });
     const [asignando, setAsignando] = useState(false);
 
-    // Carga la lista de docentes al montar el componente.
+    // ============================================================
+    // CARGA INICIAL
+    // ============================================================
     useEffect(() => {
         cargarDatos();
     }, []);
 
-    // Obtiene los docentes desde el servicio del backend.
     const cargarDatos = async () => {
         setLoading(true);
         try {
@@ -62,14 +73,18 @@ const GestionDocentesDireccion = () => {
         }
     };
 
-    // Muestra un mensaje temporal al usuario y lo limpia después de 4 segundos.
+    // ============================================================
+    // MENSAJES
+    // ============================================================
     const mostrarMensaje = (texto, tipo) => {
         setMessage(texto);
         setMessageType(tipo);
         setTimeout(() => setMessage(''), 4000);
     };
 
-    // Abre el modal para crear un docente o editar el seleccionado.
+    // ============================================================
+    // MODAL CREAR / EDITAR
+    // ============================================================
     const handleOpenModal = (docente = null) => {
         if (docente) {
             setSelectedDocente(docente);
@@ -103,29 +118,19 @@ const GestionDocentesDireccion = () => {
         setShowModal(true);
     };
 
-    // Valida campos requeridos y crea o actualiza el docente según corresponda.
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
+        if (!formData.codigoDocente.trim()) {
+            mostrarMensaje('El código del docente es requerido', 'error');
+            return;
+        }
+        if (!formData.nombres.trim() || !formData.apellidos.trim()) {
+            mostrarMensaje('Nombres y apellidos son requeridos', 'error');
+            return;
+        }
 
+        setSaving(true);
         try {
-            // Validar campos requeridos
-            if (!formData.codigoDocente.trim()) {
-                mostrarMensaje('El código del docente es requerido', 'error');
-                setLoading(false);
-                return;
-            }
-            if (!formData.nombres.trim()) {
-                mostrarMensaje('Los nombres son requeridos', 'error');
-                setLoading(false);
-                return;
-            }
-            if (!formData.apellidos.trim()) {
-                mostrarMensaje('Los apellidos son requeridos', 'error');
-                setLoading(false);
-                return;
-            }
-
             const dataToSend = {
                 codigoDocente: formData.codigoDocente.trim(),
                 nombres: formData.nombres.trim(),
@@ -139,61 +144,46 @@ const GestionDocentesDireccion = () => {
                 estado: formData.estado
             };
 
-            console.log('Enviando datos al backend:', JSON.stringify(dataToSend, null, 2));
-
             if (selectedDocente) {
-                // Actualiza el docente existente con los datos del formulario.
                 await updateDocente(selectedDocente.idDocente, dataToSend);
                 mostrarMensaje('Docente actualizado correctamente', 'success');
             } else {
-                // Crea un nuevo docente con los datos del formulario.
                 await createDocente(dataToSend);
                 mostrarMensaje('Docente creado correctamente', 'success');
             }
             setShowModal(false);
             cargarDatos();
         } catch (error) {
-            console.error('Error completo:', error);
-            console.error('Response data:', error.response?.data);
             const mensaje = error.response?.data?.mensaje || error.message || 'Error al guardar';
             mostrarMensaje(mensaje, 'error');
         } finally {
-            setLoading(false);
+            setSaving(false);
         }
     };
 
-    // Desactiva o activa un docente tras confirmar con el usuario.
+    // ============================================================
+    // ACTIVAR / DESACTIVAR
+    // ============================================================
     const handleDelete = async (docente) => {
-        if (!window.confirm(`¿Desactivar al docente ${docente.nombres} ${docente.apellidos}?`)) return;
+        const accion = docente.estado ? 'desactivar' : 'activar';
+        if (!window.confirm(`¿${accion.charAt(0).toUpperCase() + accion.slice(1)} al docente ${docente.nombres} ${docente.apellidos}?`)) return;
 
-        setLoading(true);
+        setSaving(true);
         try {
-            // Desactiva al docente por su id mediante el servicio.
             await deleteDocente(docente.idDocente);
-            mostrarMensaje('Docente desactivado correctamente', 'success');
+            mostrarMensaje(`Docente ${accion === 'desactivar' ? 'desactivado' : 'activado'} correctamente`, 'success');
             cargarDatos();
         } catch (error) {
-            const mensaje = error.response?.data?.mensaje || error.message || 'Error al desactivar';
+            const mensaje = error.response?.data?.mensaje || error.message || 'Error';
             mostrarMensaje(mensaje, 'error');
         } finally {
-            setLoading(false);
+            setSaving(false);
         }
     };
 
-    // Filtra los docentes por nombre, código o correo según el término de búsqueda.
-    const docentesFiltrados = docentes.filter(d => {
-        if (!searchTerm) return true;
-        const term = searchTerm.toLowerCase();
-        return (d.nombres?.toLowerCase().includes(term) ||
-            d.apellidos?.toLowerCase().includes(term) ||
-            d.codigoDocente?.toLowerCase().includes(term) ||
-            d.correo?.toLowerCase().includes(term));
-    });
-
     // ============================================================
-    // ASIGNACIÓN DE MATERIAS AL DOCENTE
+    // ASIGNAR MATERIAS
     // ============================================================
-    // Abre el modal de asignación y carga materias, clases y asignaciones del docente.
     const handleOpenAsignar = async (docente) => {
         setSelectedDocente(docente);
         setAsignarForm({
@@ -203,6 +193,7 @@ const GestionDocentesDireccion = () => {
             puedeCalificar: true,
             puedeAmonestar: true
         });
+        setBusquedaMateria('');
         setShowAsignarModal(true);
 
         try {
@@ -216,19 +207,17 @@ const GestionDocentesDireccion = () => {
             setClasesList(clasesData || []);
             setAsignaciones(asignacionesData || []);
         } catch (error) {
-            console.error('Error cargando datos de asignación:', error);
             mostrarMensaje('Error al cargar datos de asignación', 'error');
         }
     };
 
-    // Cierra el modal de asignación y limpia los datos temporales.
     const handleCerrarAsignar = () => {
         setShowAsignarModal(false);
         setSelectedDocente(null);
         setAsignaciones([]);
+        setBusquedaMateria('');
     };
 
-    // Valida materia y clase, y crea la asignación docente-materia.
     const handleAsignar = async (e) => {
         e.preventDefault();
         if (!asignarForm.idMateria || !asignarForm.idClase) {
@@ -238,7 +227,6 @@ const GestionDocentesDireccion = () => {
 
         setAsignando(true);
         try {
-            // Crea la asignación de materia al docente mediante el servicio.
             await createDocenteMateria({
                 idDocente: selectedDocente.idDocente,
                 idMateria: parseInt(asignarForm.idMateria),
@@ -263,11 +251,9 @@ const GestionDocentesDireccion = () => {
         }
     };
 
-    // Quita la asignación de materia al docente tras confirmar con el usuario.
     const handleQuitarAsignacion = async (asignacion) => {
         if (!window.confirm('¿Quitar esta materia asignada?')) return;
         try {
-            // Elimina la asignación por su id mediante el servicio.
             await deleteDocenteMateria(asignacion.idDocenteMateria);
             mostrarMensaje('Asignación eliminada correctamente', 'success');
             const asignacionesData = await getDocenteMateriasByDocente(selectedDocente.idDocente, asignarForm.anioLectivo);
@@ -278,266 +264,508 @@ const GestionDocentesDireccion = () => {
         }
     };
 
-    // Filtra las asignaciones activas del año lectivo seleccionado.
-    const asignacionesFiltradas = asignaciones.filter(a => a.anioLectivo === parseInt(asignarForm.anioLectivo) && a.estado);
+    // ============================================================
+    // FILTRADO Y ESTADÍSTICAS
+    // ============================================================
+    const especialidadesDisponibles = useMemo(() => {
+        const set = new Set();
+        docentes.forEach(d => {
+            if (d.especialidadDocente) set.add(d.especialidadDocente);
+        });
+        return Array.from(set).sort();
+    }, [docentes]);
 
+    const docentesFiltrados = useMemo(() => {
+        return docentes.filter(d => {
+            // Filtro por estado
+            if (filterEstado === 'activos' && !d.estado) return false;
+            if (filterEstado === 'inactivos' && d.estado) return false;
+
+            // Filtro por tipo
+            if (filterTipo !== 'todos' && d.tipoDocente !== filterTipo) return false;
+
+            // Filtro por especialidad
+            if (filterEspecialidad !== 'todas' && d.especialidadDocente !== filterEspecialidad) return false;
+
+            // Búsqueda
+            if (searchTerm) {
+                const term = searchTerm.toLowerCase();
+                return (
+                    (d.nombres && d.nombres.toLowerCase().includes(term)) ||
+                    (d.apellidos && d.apellidos.toLowerCase().includes(term)) ||
+                    (d.codigoDocente && d.codigoDocente.toLowerCase().includes(term)) ||
+                    (d.correo && d.correo.toLowerCase().includes(term)) ||
+                    (d.dui && d.dui.toLowerCase().includes(term))
+                );
+            }
+            return true;
+        });
+    }, [docentes, filterEstado, filterTipo, filterEspecialidad, searchTerm]);
+
+    const stats = useMemo(() => ({
+        total: docentes.length,
+        activos: docentes.filter(d => d.estado).length,
+        inactivos: docentes.filter(d => !d.estado).length,
+        basicas: docentes.filter(d => d.tipoDocente === 'Basica').length,
+        tecnicos: docentes.filter(d => d.tipoDocente === 'Tecnica').length
+    }), [docentes]);
+
+    // Materias filtradas para el select (con búsqueda)
+    const materiasFiltradasSelect = useMemo(() => {
+        if (!busquedaMateria.trim()) return materiasList;
+        const term = busquedaMateria.toLowerCase();
+        return materiasList.filter(m =>
+            m.nombreMateria?.toLowerCase().includes(term) ||
+            m.codigoMateria?.toLowerCase().includes(term)
+        );
+    }, [materiasList, busquedaMateria]);
+
+    // Asignaciones del año seleccionado
+    const asignacionesFiltradas = useMemo(() => {
+        return asignaciones.filter(a =>
+            Number(a.anioLectivo) === Number(asignarForm.anioLectivo) && a.estado !== false
+        );
+    }, [asignaciones, asignarForm.anioLectivo]);
+
+    // ============================================================
+    // RENDER LOADING
+    // ============================================================
     if (loading) {
         return (
-            <DashboardLayout title="Gestion de Docentes">
+            <DashboardLayout title="Gestión de Docentes - Dirección">
                 <div className="loading">Cargando...</div>
             </DashboardLayout>
         );
     }
 
+    // ============================================================
+    // RENDER PRINCIPAL
+    // ============================================================
     return (
-        <DashboardLayout title="Gestion de Docentes - Direccion">
-            {message && (
-                <div style={{
-                    padding: '0.75rem',
-                    borderRadius: '8px',
-                    marginBottom: '1rem',
-                    backgroundColor: messageType === 'success' ? '#dcfce7' : '#fee2e2',
-                    color: messageType === 'success' ? '#15803d' : '#b91c1c'
-                }}>
-                    {message}
-                </div>
-            )}
+        <DashboardLayout title="Gestión de Docentes - Dirección">
+            <style>{`
+                .gd-container { display: flex; flex-direction: column; gap: 20px; }
+                .gd-card { background: #fff; border-radius: 12px; padding: 22px; box-shadow: 0 2px 10px rgba(0,0,0,.06); border: 1px solid #e2e8f0; }
+                .gd-card h3 { margin: 0 0 16px; color: #1e3a5f; font-size: 18px; }
 
-            <div className="card">
-                <div className="filters-row" style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
-                    <input
-                        type="text"
-                        placeholder="Buscar por nombre, código, correo..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="search-input"
-                        style={{ flex: 2, padding: '8px 12px', border: '1px solid #ddd', borderRadius: '6px' }}
-                    />
-                    <button
-                        className="btn-primary"
-                        onClick={() => handleOpenModal()}
-                        style={{ padding: '8px 20px' }}
-                    >
-                        + Nuevo Docente
-                    </button>
+                .gd-filtros { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 14px; }
+                .gd-field label { display: block; font-weight: 600; color: #34495e; font-size: 13px; margin-bottom: 6px; }
+                .gd-field input, .gd-field select, .gd-field textarea {
+                    width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1;
+                    border-radius: 8px; font-size: 14px; box-sizing: border-box;
+                    font-family: inherit; transition: border-color .2s, box-shadow .2s;
+                }
+                .gd-field input:focus, .gd-field select:focus, .gd-field textarea:focus {
+                    outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.1);
+                }
+                .gd-field textarea { min-height: 80px; resize: vertical; }
+
+                .gd-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+                .gd-stat { padding: 16px; border-radius: 10px; text-align: center; border: 1px solid #e2e8f0; background: #f8fafc; }
+                .gd-stat .num { font-size: 24px; font-weight: bold; display: block; line-height: 1.2; }
+                .gd-stat .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #64748b; margin-top: 4px; }
+                .gd-stat-total { background: #eff6ff; color: #1e40af; }
+                .gd-stat-activos { background: #dcfce7; color: #15803d; }
+                .gd-stat-inactivos { background: #fee2e2; color: #b91c1c; }
+                .gd-stat-basica { background: #fef3c7; color: #b45309; }
+                .gd-stat-tecnica { background: #dbeafe; color: #1d4ed8; }
+
+                .gd-table { width: 100%; border-collapse: collapse; }
+                .gd-table thead th {
+                    background: #1e3a5f; color: #fff; padding: 11px 10px;
+                    text-align: left; font-size: 12px; text-transform: uppercase;
+                    letter-spacing: .5px; font-weight: 600;
+                }
+                .gd-table thead th:first-child { border-top-left-radius: 8px; }
+                .gd-table thead th:last-child { border-top-right-radius: 8px; }
+                .gd-table tbody tr { border-bottom: 1px solid #e2e8f0; transition: background .15s; }
+                .gd-table tbody tr:hover { background: #f8fafc; }
+                .gd-table tbody tr:nth-child(even) { background: #fafbfc; }
+                .gd-table tbody tr:nth-child(even):hover { background: #f1f5f9; }
+                .gd-table td { padding: 10px; font-size: 13px; color: #334155; vertical-align: middle; }
+
+                .gd-badge {
+                    display: inline-block; padding: 4px 12px; border-radius: 12px;
+                    font-size: 11px; font-weight: 600; text-transform: uppercase;
+                }
+                .gd-badge-activo { background: #dcfce7; color: #15803d; border: 1px solid #16a34a; }
+                .gd-badge-inactivo { background: #fee2e2; color: #b91c1c; border: 1px solid #dc2626; }
+                .gd-badge-tipo-basica { background: #fef3c7; color: #b45309; border: 1px solid #f59e0b; }
+                .gd-badge-tipo-tecnica { background: #dbeafe; color: #1d4ed8; border: 1px solid #3b82f6; }
+                .gd-badge-tipo-ambas { background: #e9d5ff; color: #6b21a8; border: 1px solid #a855f7; }
+
+                .gd-btn {
+                    padding: 9px 16px; border: none; border-radius: 8px;
+                    font-size: 13px; font-weight: 500; cursor: pointer;
+                    transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+                }
+                .gd-btn:disabled { opacity: .6; cursor: not-allowed; }
+                .gd-btn-primary { background: #1e3a5f; color: #fff; }
+                .gd-btn-primary:hover:not(:disabled) { background: #16293f; }
+                .gd-btn-info { background: #3b82f6; color: #fff; }
+                .gd-btn-info:hover:not(:disabled) { background: #2563eb; }
+                .gd-btn-success { background: #16a34a; color: #fff; }
+                .gd-btn-success:hover:not(:disabled) { background: #15803d; }
+                .gd-btn-danger { background: #dc2626; color: #fff; }
+                .gd-btn-danger:hover:not(:disabled) { background: #b91c1c; }
+                .gd-btn-teal { background: #0d9488; color: #fff; }
+                .gd-btn-teal:hover:not(:disabled) { background: #0f766e; }
+                .gd-btn-secondary { background: #e5e7eb; color: #334155; }
+                .gd-btn-secondary:hover:not(:disabled) { background: #d1d5db; }
+                .gd-btn-sm { padding: 5px 12px; font-size: 12px; }
+
+                .gd-aviso { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; font-weight: 500; }
+                .gd-aviso.success { background: #dcfce7; color: #15803d; border-left: 4px solid #16a34a; }
+                .gd-aviso.error { background: #fee2e2; color: #b91c1c; border-left: 4px solid #dc2626; }
+
+                .gd-empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+
+                .gd-modal-overlay {
+                    position: fixed; top:0; left:0; width:100%; height:100%;
+                    background: rgba(15,23,42,.55);
+                    display: flex; align-items: center; justify-content: center;
+                    z-index: 999; padding: 20px;
+                }
+                .gd-modal {
+                    background: #fff; border-radius: 12px;
+                    max-width: 620px; width: 100%; padding: 24px;
+                    max-height: 90vh; overflow-y: auto;
+                }
+                .gd-modal-lg { max-width: 780px; }
+                .gd-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+                .gd-modal-header h3 { margin: 0; font-size: 17px; color: #1e3a5f; }
+                .gd-modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; line-height: 1; }
+                .gd-modal-close:hover { color: #dc2626; }
+                .gd-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+                .gd-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+                .gd-form-grid-full { grid-column: 1 / -1; }
+
+                .gd-info-box { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #1e40af; }
+
+                .gd-acciones { display: flex; gap: 6px; flex-wrap: wrap; }
+
+                .gd-asignacion-card {
+                    display: flex; justify-content: space-between; align-items: center;
+                    padding: 12px 14px; border: 1px solid #e2e8f0; border-radius: 8px;
+                    margin-bottom: 8px; background: #fafbfc;
+                }
+                .gd-asignacion-card:hover { background: #f1f5f9; }
+
+                .gd-permisos { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; }
+                .gd-permiso-badge { font-size: 11px; padding: 2px 8px; border-radius: 6px; background: #dbeafe; color: #1d4ed8; }
+                .gd-permiso-badge.no { background: #f1f5f9; color: #94a3b8; }
+
+                @media (max-width: 900px) {
+                    .gd-filtros { grid-template-columns: 1fr 1fr; }
+                    .gd-form-grid { grid-template-columns: 1fr; }
+                }
+                @media (max-width: 600px) {
+                    .gd-filtros { grid-template-columns: 1fr; }
+                    .gd-table { font-size: 12px; }
+                    .gd-table thead th, .gd-table td { padding: 8px 6px; }
+                }
+            `}</style>
+
+            <div className="gd-container">
+                {message && <div className={`gd-aviso ${messageType}`}>{message}</div>}
+
+                {/* ESTADÍSTICAS */}
+                <div className="gd-stats">
+                    <div className="gd-stat gd-stat-total">
+                        <span className="num">{stats.total}</span>
+                        <span className="lbl">Total</span>
+                    </div>
+                    <div className="gd-stat gd-stat-activos">
+                        <span className="num">{stats.activos}</span>
+                        <span className="lbl">Activos</span>
+                    </div>
+                    <div className="gd-stat gd-stat-inactivos">
+                        <span className="num">{stats.inactivos}</span>
+                        <span className="lbl">Inactivos</span>
+                    </div>
+                    <div className="gd-stat gd-stat-basica">
+                        <span className="num">{stats.basicas}</span>
+                        <span className="lbl">Básica</span>
+                    </div>
+                    <div className="gd-stat gd-stat-tecnica">
+                        <span className="num">{stats.tecnicos}</span>
+                        <span className="lbl">Técnica</span>
+                    </div>
                 </div>
 
-                <div className="table-responsive">
-                    <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr style={{ background: '#f1f5f9' }}>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Código</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Nombres</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Apellidos</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Correo</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Especialidad</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Estado</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {docentesFiltrados.length === 0 ? (
+                {/* FILTROS */}
+                <div className="gd-card">
+                    <h3>Filtros y Búsqueda</h3>
+                    <div className="gd-filtros">
+                        <div className="gd-field">
+                            <label>Buscar</label>
+                            <input
+                                type="text"
+                                placeholder="Nombre, código, correo, DUI..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <div className="gd-field">
+                            <label>Estado</label>
+                            <select value={filterEstado} onChange={(e) => setFilterEstado(e.target.value)}>
+                                <option value="todos">Todos</option>
+                                <option value="activos">Solo activos</option>
+                                <option value="inactivos">Solo inactivos</option>
+                            </select>
+                        </div>
+                        <div className="gd-field">
+                            <label>Tipo</label>
+                            <select value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)}>
+                                <option value="todos">Todos</option>
+                                <option value="Basica">Básica</option>
+                                <option value="Tecnica">Técnica</option>
+                                <option value="Ambas">Ambas</option>
+                            </select>
+                        </div>
+                        <div className="gd-field">
+                            <label>Especialidad</label>
+                            <select value={filterEspecialidad} onChange={(e) => setFilterEspecialidad(e.target.value)}>
+                                <option value="todas">Todas</option>
+                                {especialidadesDisponibles.map(esp => (
+                                    <option key={esp} value={esp}>{esp}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginTop: '14px' }}>
+                        <button
+                            className="gd-btn gd-btn-primary"
+                            onClick={() => handleOpenModal()}
+                        >
+                            + Nuevo Docente
+                        </button>
+                        <div style={{ marginLeft: 'auto', fontSize: '13px', color: '#64748b', alignSelf: 'center' }}>
+                            Mostrando <strong>{docentesFiltrados.length}</strong> de {docentes.length} docentes
+                        </div>
+                    </div>
+                </div>
+
+                {/* TABLA */}
+                <div className="gd-card">
+                    <h3>Lista de Docentes</h3>
+                    <div className="table-responsive">
+                        <table className="gd-table">
+                            <thead>
                                 <tr>
-                                    <td colSpan="7" style={{ padding: '20px', textAlign: 'center' }}>
-                                        No hay docentes registrados
-                                    </td>
+                                    <th style={{ width: '110px' }}>Código</th>
+                                    <th>Nombres</th>
+                                    <th>Apellidos</th>
+                                    <th>Correo</th>
+                                    <th>Especialidad</th>
+                                    <th style={{ width: '100px', textAlign: 'center' }}>Tipo</th>
+                                    <th style={{ width: '100px' }}>Estado</th>
+                                    <th style={{ width: '260px' }}>Acciones</th>
                                 </tr>
-                            ) : (
-                                docentesFiltrados.map((d) => (
-                                    <tr key={d.idDocente} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                        <td style={{ padding: '8px' }}><strong>{d.codigoDocente}</strong></td>
-                                        <td style={{ padding: '8px' }}>{d.nombres}</td>
-                                        <td style={{ padding: '8px' }}>{d.apellidos}</td>
-                                        <td style={{ padding: '8px' }}>{d.correo || '-'}</td>
-                                        <td style={{ padding: '8px' }}>{d.especialidadDocente || '-'}</td>
-                                        <td style={{ padding: '8px' }}>
-                                            <span style={{
-                                                padding: '4px 12px',
-                                                borderRadius: '12px',
-                                                fontSize: '12px',
-                                                fontWeight: 'bold',
-                                                backgroundColor: d.estado ? '#dcfce7' : '#fee2e2',
-                                                color: d.estado ? '#15803d' : '#b91c1c'
-                                            }}>
-                                                {d.estado ? 'Activo' : 'Inactivo'}
-                                            </span>
-                                        </td>
-                                        <td style={{ padding: '8px' }}>
-                                            <button
-                                                className="btn-edit"
-                                                onClick={() => handleOpenModal(d)}
-                                                style={{ padding: '4px 12px', marginRight: '4px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                            >
-                                                Editar
-                                            </button>
-                                            <button
-                                                className="btn-edit"
-                                                onClick={() => handleOpenAsignar(d)}
-                                                style={{ padding: '4px 12px', marginRight: '4px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                                title="Asignar materias al docente"
-                                            >
-                                                Materias
-                                            </button>
-                                            <button
-                                                className="btn-danger"
-                                                onClick={() => handleDelete(d)}
-                                                style={{ padding: '4px 12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                            >
-                                                {d.estado ? 'Desactivar' : 'Activar'}
-                                            </button>
+                            </thead>
+                            <tbody>
+                                {docentesFiltrados.length === 0 ? (
+                                    <tr>
+                                        <td colSpan="8" className="gd-empty">
+                                            No hay docentes que coincidan con los filtros
                                         </td>
                                     </tr>
-                                ))
-                            )}
-                        </tbody>
-                    </table>
+                                ) : (
+                                    docentesFiltrados.map((d) => {
+                                        const tipoClase = d.tipoDocente === 'Tecnica'
+                                            ? 'gd-badge-tipo-tecnica'
+                                            : d.tipoDocente === 'Ambas'
+                                                ? 'gd-badge-tipo-ambas'
+                                                : 'gd-badge-tipo-basica';
+                                        const tipoLabel = d.tipoDocente === 'Tecnica'
+                                            ? 'Técnica'
+                                            : d.tipoDocente === 'Ambas'
+                                                ? 'Ambas'
+                                                : 'Básica';
+                                        return (
+                                            <tr key={d.idDocente}>
+                                                <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+                                                    <strong>{d.codigoDocente}</strong>
+                                                </td>
+                                                <td><strong>{d.nombres}</strong></td>
+                                                <td>{d.apellidos}</td>
+                                                <td style={{ fontSize: '12px' }}>{d.correo || '-'}</td>
+                                                <td>{d.especialidadDocente || '-'}</td>
+                                                <td style={{ textAlign: 'center' }}>
+                                                    <span className={`gd-badge ${tipoClase}`}>
+                                                        {tipoLabel}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span className={`gd-badge ${d.estado ? 'gd-badge-activo' : 'gd-badge-inactivo'}`}>
+                                                        {d.estado ? 'Activo' : 'Inactivo'}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div className="gd-acciones">
+                                                        <button
+                                                            className="gd-btn gd-btn-info gd-btn-sm"
+                                                            onClick={() => handleOpenModal(d)}
+                                                        >
+                                                            Editar
+                                                        </button>
+                                                        <button
+                                                            className="gd-btn gd-btn-teal gd-btn-sm"
+                                                            onClick={() => handleOpenAsignar(d)}
+                                                        >
+                                                            Materias
+                                                        </button>
+                                                        <button
+                                                            className={`gd-btn ${d.estado ? 'gd-btn-danger' : 'gd-btn-success'} gd-btn-sm`}
+                                                            onClick={() => handleDelete(d)}
+                                                        >
+                                                            {d.estado ? 'Desactivar' : 'Activar'}
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
 
+            {/* MODAL CREAR / EDITAR DOCENTE */}
             {showModal && (
-                <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-                    <div className="modal-container" style={{ background: '#fff', borderRadius: '12px', maxWidth: '600px', width: '100%', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
-                        <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div className="gd-modal-overlay" onClick={() => !saving && setShowModal(false)}>
+                    <div className="gd-modal" onClick={e => e.stopPropagation()}>
+                        <div className="gd-modal-header">
                             <h3>{selectedDocente ? 'Editar Docente' : 'Nuevo Docente'}</h3>
-                            <button className="modal-close" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>X</button>
+                            <button className="gd-modal-close" onClick={() => setShowModal(false)} disabled={saving}>X</button>
                         </div>
                         <form onSubmit={handleSubmit}>
-                            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Código *</label>
+                            <div className="gd-form-grid">
+                                <div className="gd-field">
+                                    <label>Código *</label>
                                     <input
                                         type="text"
                                         value={formData.codigoDocente}
                                         onChange={(e) => setFormData({ ...formData, codigoDocente: e.target.value })}
                                         required
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                                     />
                                 </div>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>DUI</label>
+                                <div className="gd-field">
+                                    <label>DUI</label>
                                     <input
                                         type="text"
                                         value={formData.dui}
                                         onChange={(e) => setFormData({ ...formData, dui: e.target.value })}
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+                                        placeholder="00000000-0"
                                     />
                                 </div>
-                            </div>
-                            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Nombres *</label>
+                                <div className="gd-field">
+                                    <label>Nombres *</label>
                                     <input
                                         type="text"
                                         value={formData.nombres}
                                         onChange={(e) => setFormData({ ...formData, nombres: e.target.value })}
                                         required
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                                     />
                                 </div>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Apellidos *</label>
+                                <div className="gd-field">
+                                    <label>Apellidos *</label>
                                     <input
                                         type="text"
                                         value={formData.apellidos}
                                         onChange={(e) => setFormData({ ...formData, apellidos: e.target.value })}
                                         required
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                                     />
                                 </div>
-                            </div>
-                            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Correo</label>
+                                <div className="gd-field">
+                                    <label>Correo</label>
                                     <input
                                         type="email"
                                         value={formData.correo}
                                         onChange={(e) => setFormData({ ...formData, correo: e.target.value })}
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                                     />
                                 </div>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Teléfono</label>
+                                <div className="gd-field">
+                                    <label>Teléfono</label>
                                     <input
                                         type="text"
                                         value={formData.telefono}
                                         onChange={(e) => setFormData({ ...formData, telefono: e.target.value })}
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                                     />
                                 </div>
-                            </div>
-                            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Especialidad</label>
+                                <div className="gd-field">
+                                    <label>Especialidad</label>
                                     <input
                                         type="text"
                                         value={formData.especialidadDocente}
                                         onChange={(e) => setFormData({ ...formData, especialidadDocente: e.target.value })}
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+                                        placeholder="Ej: Matemática, Programación"
                                     />
                                 </div>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Tipo</label>
+                                <div className="gd-field">
+                                    <label>Tipo</label>
                                     <select
                                         value={formData.tipoDocente}
                                         onChange={(e) => setFormData({ ...formData, tipoDocente: e.target.value })}
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                                     >
                                         <option value="Basica">Básica</option>
                                         <option value="Tecnica">Técnica</option>
                                         <option value="Ambas">Ambas</option>
                                     </select>
                                 </div>
-                            </div>
-                            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '12px' }}>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Fecha Ingreso</label>
+                                <div className="gd-field">
+                                    <label>Fecha de Ingreso</label>
                                     <input
                                         type="date"
                                         value={formData.fechaIngreso}
                                         onChange={(e) => setFormData({ ...formData, fechaIngreso: e.target.value })}
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                                     />
                                 </div>
-                                <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '24px' }}>
-                                    <label>
+                                <div className="gd-field" style={{ display: 'flex', alignItems: 'center', paddingTop: '24px' }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontWeight: '500' }}>
                                         <input
                                             type="checkbox"
                                             checked={formData.estado}
                                             onChange={(e) => setFormData({ ...formData, estado: e.target.checked })}
                                         />
-                                        {' '}Activo
+                                        Docente activo
                                     </label>
                                 </div>
                             </div>
-                            <div className="modal-buttons" style={{ display: 'flex', gap: '12px', marginTop: '20px', justifyContent: 'flex-end' }}>
-                                <button type="button" className="btn-cancel" onClick={() => setShowModal(false)} style={{ padding: '8px 20px', background: '#e5e7eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancelar</button>
-                                <button type="submit" className="btn-primary" style={{ padding: '8px 20px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-                                    {selectedDocente ? 'Actualizar' : 'Crear'}
+                            <div className="gd-modal-actions">
+                                <button type="button" className="gd-btn gd-btn-secondary" onClick={() => setShowModal(false)} disabled={saving}>
+                                    Cancelar
+                                </button>
+                                <button type="submit" className="gd-btn gd-btn-primary" disabled={saving}>
+                                    {saving ? 'Guardando...' : (selectedDocente ? 'Actualizar' : 'Crear')}
                                 </button>
                             </div>
                         </form>
                     </div>
                 </div>
             )}
+
+            {/* MODAL ASIGNAR MATERIAS */}
             {showAsignarModal && selectedDocente && (
-                <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-                    <div className="modal-container" style={{ background: '#fff', borderRadius: '12px', maxWidth: '700px', width: '100%', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
-                        <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                            <h3>Asignar Materias - {selectedDocente.nombres} {selectedDocente.apellidos}</h3>
-                            <button className="modal-close" onClick={handleCerrarAsignar} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>X</button>
+                <div className="gd-modal-overlay" onClick={() => !asignando && handleCerrarAsignar()}>
+                    <div className="gd-modal gd-modal-lg" onClick={e => e.stopPropagation()}>
+                        <div className="gd-modal-header">
+                            <h3>Asignar Materias</h3>
+                            <button className="gd-modal-close" onClick={handleCerrarAsignar} disabled={asignando}>X</button>
                         </div>
 
-                        <div style={{ marginBottom: '12px' }}>
-                            <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Año Lectivo</label>
+                        <div className="gd-info-box">
+                            <strong>Docente:</strong> {selectedDocente.nombres} {selectedDocente.apellidos}<br />
+                            <strong>Código:</strong> {selectedDocente.codigoDocente} | <strong>Especialidad:</strong> {selectedDocente.especialidadDocente || '-'}
+                        </div>
+
+                        {/* Selector de año */}
+                        <div className="gd-field" style={{ marginBottom: '14px' }}>
+                            <label>Año Lectivo</label>
                             <select
                                 value={asignarForm.anioLectivo}
                                 onChange={(e) => {
@@ -547,114 +775,133 @@ const GestionDocentesDireccion = () => {
                                         .then(data => setAsignaciones(data || []))
                                         .catch(() => setAsignaciones([]));
                                 }}
-                                className="form-control"
-                                style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                             >
-                                {[new Date().getFullYear(), new Date().getFullYear() + 1].map(a => (
+                                {[new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1].map(a => (
                                     <option key={a} value={a}>{a}</option>
                                 ))}
                             </select>
                         </div>
 
-                        <form onSubmit={handleAsignar}>
-                            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Materia</label>
-                                    <select
-                                        value={asignarForm.idMateria}
-                                        onChange={(e) => setAsignarForm({ ...asignarForm, idMateria: e.target.value })}
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                                        required
-                                    >
-                                        <option value="">Seleccione...</option>
-                                        {materiasList.map(m => (
-                                            <option key={m.idMateria} value={m.idMateria}>{m.nombreMateria}</option>
-                                        ))}
-                                    </select>
+                        {/* Formulario de asignación */}
+                        <div style={{ padding: '16px', background: '#f8fafc', borderRadius: '8px', marginBottom: '20px' }}>
+                            <h4 style={{ margin: '0 0 12px', color: '#334155', fontSize: '14px' }}>Nueva Asignación</h4>
+                            <form onSubmit={handleAsignar}>
+                                <div className="gd-form-grid">
+                                    <div className="gd-field">
+                                        <label>Buscar Materia</label>
+                                        <input
+                                            type="text"
+                                            placeholder="Buscar por nombre o código..."
+                                            value={busquedaMateria}
+                                            onChange={(e) => setBusquedaMateria(e.target.value)}
+                                            style={{ marginBottom: '8px' }}
+                                        />
+                                        <select
+                                            value={asignarForm.idMateria}
+                                            onChange={(e) => setAsignarForm({ ...asignarForm, idMateria: e.target.value })}
+                                            required
+                                        >
+                                            <option value="">Seleccione...</option>
+                                            {materiasFiltradasSelect.map(m => (
+                                                <option key={m.idMateria} value={m.idMateria}>
+                                                    {m.nombreMateria} {m.codigoMateria ? `(${m.codigoMateria})` : ''}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="gd-field">
+                                        <label>Clase</label>
+                                        <select
+                                            value={asignarForm.idClase}
+                                            onChange={(e) => setAsignarForm({ ...asignarForm, idClase: e.target.value })}
+                                            required
+                                        >
+                                            <option value="">Seleccione...</option>
+                                            {clasesList
+                                                .filter(c => !asignarForm.anioLectivo || Number(c.anioLectivo) === Number(asignarForm.anioLectivo))
+                                                .map(c => (
+                                                    <option key={c.idClase} value={c.idClase}>
+                                                        {c.nombreClase} ({c.seccion})
+                                                    </option>
+                                                ))}
+                                        </select>
+                                    </div>
                                 </div>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Clase</label>
-                                    <select
-                                        value={asignarForm.idClase}
-                                        onChange={(e) => setAsignarForm({ ...asignarForm, idClase: e.target.value })}
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                                        required
-                                    >
-                                        <option value="">Seleccione...</option>
-                                        {clasesList.map(c => (
-                                            <option key={c.idClase} value={c.idClase}>
-                                                {c.nombreClase} ({c.seccion})
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Permisos</label>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', paddingTop: '8px' }}>
-                                        <label style={{ fontWeight: '400' }}>
+                                <div className="gd-field" style={{ marginTop: '12px' }}>
+                                    <label>Permisos</label>
+                                    <div style={{ display: 'flex', gap: '20px', marginTop: '6px' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '400', cursor: 'pointer' }}>
                                             <input
                                                 type="checkbox"
                                                 checked={asignarForm.puedeCalificar}
                                                 onChange={(e) => setAsignarForm({ ...asignarForm, puedeCalificar: e.target.checked })}
-                                            /> Calificar
+                                            />
+                                            Puede calificar
                                         </label>
-                                        <label style={{ fontWeight: '400' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: '400', cursor: 'pointer' }}>
                                             <input
                                                 type="checkbox"
                                                 checked={asignarForm.puedeAmonestar}
                                                 onChange={(e) => setAsignarForm({ ...asignarForm, puedeAmonestar: e.target.checked })}
-                                            /> Amonestar
+                                            />
+                                            Puede amonestar
                                         </label>
                                     </div>
                                 </div>
-                            </div>
-                            <div style={{ display: 'flex', gap: '12px', marginTop: '12px', justifyContent: 'flex-end' }}>
-                                <button type="submit" className="btn-primary" disabled={asignando} style={{ padding: '8px 20px', background: '#0d9488', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-                                    {asignando ? 'Asignando...' : '+ Asignar Materia'}
-                                </button>
-                            </div>
-                        </form>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '14px' }}>
+                                    <button type="submit" className="gd-btn gd-btn-teal" disabled={asignando}>
+                                        {asignando ? 'Asignando...' : '+ Asignar Materia'}
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
 
-                        <div style={{ marginTop: '20px' }}>
-                            <h4 style={{ marginBottom: '8px' }}>Materias asignadas ({asignacionesFiltradas.length})</h4>
-                            {asignacionesFiltradas.length === 0 ? (
-                                <p style={{ color: '#7f8c8d' }}>Sin materias asignadas para este año.</p>
-                            ) : (
-                                <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                                    <thead>
-                                        <tr style={{ background: '#f1f5f9' }}>
-                                            <th style={{ padding: '8px', textAlign: 'left' }}>Materia</th>
-                                            <th style={{ padding: '8px', textAlign: 'left' }}>Clase</th>
-                                            <th style={{ padding: '8px', textAlign: 'left' }}>Calificar</th>
-                                            <th style={{ padding: '8px', textAlign: 'left' }}>Amonestar</th>
-                                            <th style={{ padding: '8px', textAlign: 'left' }}>Acción</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {asignacionesFiltradas.map(a => (
-                                            <tr key={a.idDocenteMateria} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                                <td style={{ padding: '8px' }}>{a.materia?.nombreMateria || a.nombreMateria || `#${a.idMateria}`}</td>
-                                                <td style={{ padding: '8px' }}>
-                                                    {a.clase?.nombreClase || a.nombreClase || `#${a.idClase}`}
-                                                    {a.clase?.seccion ? ` (${a.clase.seccion})` : (a.seccion ? ` (${a.seccion})` : '')}
-                                                </td>
-                                                <td style={{ padding: '8px' }}>{a.puedeCalificar ? 'Sí' : 'No'}</td>
-                                                <td style={{ padding: '8px' }}>{a.puedeAmonestar ? 'Sí' : 'No'}</td>
-                                                <td style={{ padding: '8px' }}>
-                                                    <button
-                                                        onClick={() => handleQuitarAsignacion(a)}
-                                                        style={{ padding: '4px 10px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}
-                                                    >
-                                                        Quitar
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            )}
+                        {/* Lista de asignaciones */}
+                        <h4 style={{ margin: '0 0 12px', color: '#334155', fontSize: '15px' }}>
+                            Materias asignadas en {asignarForm.anioLectivo} ({asignacionesFiltradas.length})
+                        </h4>
+                        {asignacionesFiltradas.length === 0 ? (
+                            <p style={{ color: '#94a3b8', textAlign: 'center', padding: '20px' }}>
+                                Sin materias asignadas para este año
+                            </p>
+                        ) : (
+                            asignacionesFiltradas.map(a => {
+                                const nombreMateria = a.materia?.nombreMateria || a.nombreMateria || `#${a.idMateria}`;
+                                const nombreClase = a.clase?.nombreClase || a.nombreClase || `#${a.idClase}`;
+                                const seccion = a.clase?.seccion || a.seccion || '';
+                                return (
+                                    <div key={a.idDocenteMateria} className="gd-asignacion-card">
+                                        <div>
+                                            <div style={{ fontWeight: '600', color: '#1e3a5f', fontSize: '14px' }}>
+                                                {nombreMateria}
+                                            </div>
+                                            <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                                                {nombreClase} {seccion ? `(Sección ${seccion})` : ''}
+                                            </div>
+                                            <div className="gd-permisos">
+                                                <span className={`gd-permiso-badge ${!a.puedeCalificar ? 'no' : ''}`}>
+                                                    {a.puedeCalificar ? 'Califica' : 'No califica'}
+                                                </span>
+                                                <span className={`gd-permiso-badge ${!a.puedeAmonestar ? 'no' : ''}`}>
+                                                    {a.puedeAmonestar ? 'Amonesta' : 'No amonesta'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            className="gd-btn gd-btn-danger gd-btn-sm"
+                                            onClick={() => handleQuitarAsignacion(a)}
+                                        >
+                                            Quitar
+                                        </button>
+                                    </div>
+                                );
+                            })
+                        )}
+
+                        <div className="gd-modal-actions">
+                            <button className="gd-btn gd-btn-secondary" onClick={handleCerrarAsignar}>
+                                Cerrar
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -1,18 +1,26 @@
-// Componente Gestión de Periodos (Dirección): administra los periodos académicos y su estado activo.
-import React, { useState, useEffect } from 'react';
+// Componente Gestión de Periodos (Admin): administra los periodos académicos.
+import React, { useState, useEffect, useMemo } from 'react';
 import DashboardLayout from '../Layout/DashboardLayout';
 import API from '../../services/api';
 
-// Componente principal: crea, edita, elimina y activa/desactiva periodos académicos.
-const GestionPeriodosDireccion = () => {
-    // Estados: lista de periodos, periodo activo, modal, formulario y mensajes.
+const GestionPeriodosAdmin = () => {
+    // ============================================================
+    // ESTADOS
+    // ============================================================
     const [periodos, setPeriodos] = useState([]);
     const [periodoActivo, setPeriodoActivo] = useState(null);
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
     const [showModal, setShowModal] = useState(false);
     const [editingPeriodo, setEditingPeriodo] = useState(null);
-    const [message, setMessage] = useState('');
-    const [messageType, setMessageType] = useState('');
+    const [mensaje, setMensaje] = useState(null);
+
+    // Filtros
+    const [filterAnio, setFilterAnio] = useState('');
+    const [filterEstado, setFilterEstado] = useState('todos');
+    const [busqueda, setBusqueda] = useState('');
+
+    // Formulario
     const [formData, setFormData] = useState({
         anioLectivo: new Date().getFullYear(),
         numeroPeriodo: 1,
@@ -22,21 +30,19 @@ const GestionPeriodosDireccion = () => {
         estado: 'Cerrado'
     });
 
-    // Carga los periodos y el periodo activo al montar el componente.
+    // ============================================================
+    // CARGA DE DATOS
+    // ============================================================
     useEffect(() => {
         cargarDatos();
     }, []);
 
-    // Obtiene en paralelo la lista de periodos y el periodo activo desde la API.
     const cargarDatos = async () => {
         setLoading(true);
         try {
-            // Petición GET /periodosacademicos para listar todos los periodos.
             const periodosRes = await API.get('/periodosacademicos');
             setPeriodos(periodosRes.data || []);
 
-            // Petición GET /periodosacademicos/activo para obtener el periodo activo.
-            // Un 404 es un caso normal: significa que no hay ningun periodo activo.
             let activo = null;
             try {
                 const activoRes = await API.get('/periodosacademicos/activo');
@@ -54,14 +60,17 @@ const GestionPeriodosDireccion = () => {
         }
     };
 
-    // Muestra un mensaje temporal al usuario y lo limpia después de 4 segundos.
-    const mostrarMensaje = (texto, tipo) => {
-        setMessage(texto);
-        setMessageType(tipo);
-        setTimeout(() => setMessage(''), 4000);
+    // ============================================================
+    // MENSAJES
+    // ============================================================
+    const mostrarMensaje = (texto, tipo = 'success') => {
+        setMensaje({ texto, tipo });
+        setTimeout(() => setMensaje(null), 4000);
     };
 
-    // Abre el modal para crear un periodo o editar el seleccionado.
+    // ============================================================
+    // MODAL
+    // ============================================================
     const handleOpenModal = (periodo = null) => {
         if (periodo) {
             setEditingPeriodo(periodo);
@@ -87,31 +96,66 @@ const GestionPeriodosDireccion = () => {
         setShowModal(true);
     };
 
-    // Valida y crea o actualiza el periodo académico.
+    const handleCerrarModal = () => {
+        if (saving) return;
+        setShowModal(false);
+    };
+
+    // ============================================================
+    // SUBMIT
+    // ============================================================
     const handleSubmit = async (e) => {
         e.preventDefault();
+
+        if (!formData.nombre.trim()) {
+            mostrarMensaje('El nombre del periodo es requerido', 'error');
+            return;
+        }
+        if (!formData.fechaInicio || !formData.fechaFin) {
+            mostrarMensaje('Las fechas son requeridas', 'error');
+            return;
+        }
+        if (new Date(formData.fechaInicio) >= new Date(formData.fechaFin)) {
+            mostrarMensaje('La fecha de fin debe ser posterior a la fecha de inicio', 'error');
+            return;
+        }
+
+        setSaving(true);
         try {
+            const dataToSend = {
+                anioLectivo: parseInt(formData.anioLectivo),
+                numeroPeriodo: parseInt(formData.numeroPeriodo),
+                nombre: formData.nombre.trim(),
+                fechaInicio: formData.fechaInicio,
+                fechaFin: formData.fechaFin,
+                estado: formData.estado
+            };
+
             if (editingPeriodo) {
-                // Petición PUT /periodosacademicos/{id} para actualizar el periodo.
-                await API.put(`/periodosacademicos/${editingPeriodo.idPeriodo}`, formData);
+                await API.put(`/periodosacademicos/${editingPeriodo.idPeriodo}`, dataToSend);
                 mostrarMensaje('Periodo actualizado correctamente', 'success');
             } else {
-                // Petición POST /periodosacademicos para crear un nuevo periodo.
-                await API.post('/periodosacademicos', formData);
+                await API.post('/periodosacademicos', dataToSend);
                 mostrarMensaje('Periodo creado correctamente', 'success');
             }
             setShowModal(false);
             cargarDatos();
         } catch (error) {
-            mostrarMensaje(error.response?.data?.mensaje || 'Error al guardar', 'error');
+            let msg = 'Error al guardar';
+            if (error.response?.data?.mensaje) msg = error.response.data.mensaje;
+            else if (error.response?.data?.message) msg = error.response.data.message;
+            mostrarMensaje(msg, 'error');
+        } finally {
+            setSaving(false);
         }
     };
 
-    // Elimina un periodo académico tras confirmar con el usuario.
+    // ============================================================
+    // ELIMINAR
+    // ============================================================
     const handleDelete = async (id, nombre) => {
-        if (!window.confirm(`Eliminar el periodo "${nombre}"?`)) return;
+        if (!window.confirm(`¿Eliminar el periodo "${nombre}"?\nEsta acción no se puede deshacer.`)) return;
         try {
-            // Petición DELETE /periodosacademicos/{id} para borrar el periodo.
             await API.delete(`/periodosacademicos/${id}`);
             mostrarMensaje('Periodo eliminado correctamente', 'success');
             cargarDatos();
@@ -120,15 +164,14 @@ const GestionPeriodosDireccion = () => {
         }
     };
 
-    // ✅ CORREGIDO: Función async
-    // Activa o desactiva un periodo, verificando que solo haya uno activo por año.
+    // ============================================================
+    // ACTIVAR / DESACTIVAR
+    // ============================================================
     const handleToggleEstado = async (periodo) => {
         const nuevoEstado = periodo.estado === 'Activo' ? 'Cerrado' : 'Activo';
 
-        // Si se va a activar, verificar que no haya otro periodo activo en el mismo año
         if (nuevoEstado === 'Activo') {
             try {
-                // Petición GET /periodosacademicos para validar periodos activos del año.
                 const response = await API.get('/periodosacademicos');
                 const existeOtroActivo = response.data.some(p =>
                     p.estado === 'Activo' &&
@@ -137,7 +180,7 @@ const GestionPeriodosDireccion = () => {
                 );
 
                 if (existeOtroActivo) {
-                    mostrarMensaje('Ya hay un periodo activo para este año lectivo. Desactivelo primero.', 'error');
+                    mostrarMensaje('Ya hay un periodo activo para este año lectivo. Desactívelo primero.', 'error');
                     return;
                 }
             } catch (error) {
@@ -146,208 +189,722 @@ const GestionPeriodosDireccion = () => {
             }
         }
 
+        setSaving(true);
         try {
-            // Petición PUT /periodosacademicos/{id} para cambiar el estado del periodo.
             await API.put(`/periodosacademicos/${periodo.idPeriodo}`, { ...periodo, estado: nuevoEstado });
             mostrarMensaje(`Periodo ${nuevoEstado === 'Activo' ? 'activado' : 'desactivado'} correctamente`, 'success');
             cargarDatos();
         } catch (error) {
             mostrarMensaje('Error al cambiar estado', 'error');
+        } finally {
+            setSaving(false);
         }
     };
 
-    // Devuelve el color según el estado del periodo.
-    const getEstadoColor = (estado) => {
-        if (estado === 'Activo') return '#16a34a';
-        if (estado === 'Cerrado') return '#dc2626';
-        return '#e67e22';
+    // ============================================================
+    // HELPERS
+    // ============================================================
+    const getEstadoBadge = (estado) => {
+        if (estado === 'Activo') return { bg: '#dcfce7', color: '#15803d', border: '#16a34a' };
+        if (estado === 'Cerrado') return { bg: '#fee2e2', color: '#b91c1c', border: '#dc2626' };
+        return { bg: '#fef3c7', color: '#b45309', border: '#e67e22' };
     };
 
+    const formatearFecha = (fecha) => {
+        if (!fecha) return '-';
+        return new Date(fecha).toLocaleDateString('es-SV', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        });
+    };
+
+    const diasRestantes = useMemo(() => {
+        if (!periodoActivo?.fechaFin) return null;
+        const hoy = new Date();
+        const fin = new Date(periodoActivo.fechaFin);
+        const diff = Math.ceil((fin - hoy) / (1000 * 60 * 60 * 24));
+        return diff;
+    }, [periodoActivo]);
+
+    // ============================================================
+    // FILTRADO Y ESTADÍSTICAS
+    // ============================================================
+    const aniosUnicos = useMemo(() => {
+        const set = new Set();
+        periodos.forEach(p => {
+            if (p.anioLectivo) set.add(p.anioLectivo);
+        });
+        return Array.from(set).sort((a, b) => b - a);
+    }, [periodos]);
+
+    const periodosFiltrados = useMemo(() => {
+        return periodos.filter(p => {
+            if (filterAnio && String(p.anioLectivo) !== String(filterAnio)) return false;
+            if (filterEstado === 'activos' && p.estado !== 'Activo') return false;
+            if (filterEstado === 'cerrados' && p.estado !== 'Cerrado') return false;
+            if (busqueda) {
+                const term = busqueda.toLowerCase();
+                return (
+                    (p.nombre && p.nombre.toLowerCase().includes(term)) ||
+                    (String(p.numeroPeriodo) && String(p.numeroPeriodo).includes(term))
+                );
+            }
+            return true;
+        }).sort((a, b) => {
+            if (a.anioLectivo !== b.anioLectivo) return b.anioLectivo - a.anioLectivo;
+            return a.numeroPeriodo - b.numeroPeriodo;
+        });
+    }, [periodos, filterAnio, filterEstado, busqueda]);
+
+    const stats = useMemo(() => ({
+        total: periodos.length,
+        activos: periodos.filter(p => p.estado === 'Activo').length,
+        cerrados: periodos.filter(p => p.estado === 'Cerrado').length
+    }), [periodos]);
+
+    const filtrosActivos = (filterAnio ? 1 : 0) + (filterEstado !== 'todos' ? 1 : 0) + (busqueda ? 1 : 0);
+
+    const limpiarFiltros = () => {
+        setFilterAnio('');
+        setFilterEstado('todos');
+        setBusqueda('');
+    };
+
+    // ============================================================
+    // RENDER LOADING
+    // ============================================================
     if (loading) {
         return (
-            <DashboardLayout title="Gestion de Periodos">
+            <DashboardLayout title="Gestión de Periodos">
                 <div className="loading">Cargando...</div>
             </DashboardLayout>
         );
     }
 
+    // ============================================================
+    // RENDER PRINCIPAL
+    // ============================================================
     return (
-        <DashboardLayout title="Gestion de Periodos Academicos - Direccion">
-            {message && (
-                <div style={{
-                    padding: '0.75rem',
-                    borderRadius: '8px',
-                    marginBottom: '1rem',
-                    backgroundColor: messageType === 'success' ? '#dcfce7' : '#fee2e2',
-                    color: messageType === 'success' ? '#15803d' : '#b91c1c'
-                }}>
-                    {message}
-                </div>
-            )}
+        <DashboardLayout title="Gestión de Periodos Académicos">
+            <style>{`
+                /* Reset forzado para toda la tabla - sin fondo azul */
+                .gpa-wrapper table,
+                .gpa-wrapper thead,
+                .gpa-wrapper thead tr,
+                .gpa-wrapper thead th,
+                .gpa-wrapper tbody,
+                .gpa-wrapper tbody tr,
+                .gpa-wrapper tbody td {
+                    background-color: #ffffff !important;
+                    background-image: none !important;
+                    color: #1e293b !important;
+                }
 
-            {periodoActivo && (
-                <div className="card" style={{ borderLeft: '4px solid #16a34a' }}>
-                    <h3>Periodo Activo</h3>
-                    <p><strong>{periodoActivo.nombre}</strong> - {periodoActivo.anioLectivo}</p>
-                    <p>Del {new Date(periodoActivo.fechaInicio).toLocaleDateString()} al {new Date(periodoActivo.fechaFin).toLocaleDateString()}</p>
-                </div>
-            )}
+                /* Contenedor general */
+                .gpa-wrapper { display: flex; flex-direction: column; gap: 20px; background-color: #ffffff; }
 
-            <div className="card">
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                    <h3>Periodos Academicos</h3>
-                    <button className="btn-primary" onClick={() => handleOpenModal()}>
-                        + Nuevo Periodo
-                    </button>
+                .gpa-card {
+                    background: #ffffff;
+                    border-radius: 12px;
+                    padding: 22px;
+                    box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 1px 2px rgba(0,0,0,.03);
+                    border: 1px solid #e2e8f0;
+                }
+                .gpa-card h3 { margin: 0 0 16px; color: #1e3a5f; font-size: 18px; }
+
+                /* Tarjeta de periodo activo - blanco con borde verde (sin gradiente) */
+                .gpa-activo-card {
+                    background: #ffffff;
+                    border: 2px solid #16a34a;
+                    border-radius: 12px;
+                    padding: 22px;
+                    box-shadow: 0 1px 3px rgba(22,163,74,.15);
+                }
+                .gpa-activo-header {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    margin-bottom: 16px;
+                }
+                .gpa-activo-indicador {
+                    width: 10px;
+                    height: 10px;
+                    border-radius: 50%;
+                    background: #16a34a;
+                    box-shadow: 0 0 0 4px rgba(22,163,74,.2);
+                }
+                .gpa-activo-header h3 {
+                    margin: 0;
+                    color: #15803d;
+                    font-size: 13px;
+                    text-transform: uppercase;
+                    letter-spacing: .5px;
+                    font-weight: 700;
+                }
+                .gpa-activo-nombre {
+                    font-size: 22px;
+                    font-weight: 700;
+                    color: #0f172a;
+                    margin: 0 0 8px;
+                }
+                .gpa-activo-badge {
+                    display: inline-block;
+                    background: #dcfce7;
+                    color: #15803d;
+                    border: 1px solid #16a34a;
+                    padding: 4px 12px;
+                    border-radius: 12px;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                .gpa-activo-info {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+                    gap: 16px;
+                    margin-top: 16px;
+                    padding-top: 16px;
+                    border-top: 1px solid #e2e8f0;
+                }
+                .gpa-activo-info-item { display: flex; flex-direction: column; }
+                .gpa-activo-info-item .lbl {
+                    font-size: 11px;
+                    text-transform: uppercase;
+                    letter-spacing: .5px;
+                    color: #64748b;
+                    margin-bottom: 4px;
+                    font-weight: 600;
+                }
+                .gpa-activo-info-item .val {
+                    font-size: 15px;
+                    font-weight: 600;
+                    color: #0f172a;
+                }
+
+                /* Estadísticas */
+                .gpa-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
+                .gpa-stat {
+                    padding: 16px;
+                    border-radius: 10px;
+                    text-align: center;
+                    border: 1px solid #e2e8f0;
+                    background: #ffffff;
+                }
+                .gpa-stat .num { font-size: 24px; font-weight: bold; display: block; line-height: 1.2; }
+                .gpa-stat .lbl {
+                    font-size: 11px;
+                    text-transform: uppercase;
+                    letter-spacing: .5px;
+                    color: #64748b;
+                    margin-top: 4px;
+                }
+                .gpa-stat-total { background: #eff6ff; color: #1e40af; border-color: #bfdbfe; }
+                .gpa-stat-activos { background: #dcfce7; color: #15803d; border-color: #bbf7d0; }
+                .gpa-stat-cerrados { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+
+                /* Filtros */
+                .gpa-filtros { display: grid; grid-template-columns: 1fr 1fr 2fr; gap: 14px; }
+                .gpa-field label {
+                    display: block;
+                    font-weight: 600;
+                    color: #34495e;
+                    font-size: 13px;
+                    margin-bottom: 6px;
+                }
+                .gpa-field input, .gpa-field select {
+                    width: 100%;
+                    padding: 9px 12px;
+                    border: 1px solid #cbd5e1;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    box-sizing: border-box;
+                    font-family: inherit;
+                    transition: border-color .2s, box-shadow .2s;
+                    background-color: #ffffff;
+                    color: #1e293b;
+                }
+                .gpa-field input:focus, .gpa-field select:focus {
+                    outline: none;
+                    border-color: #3b82f6;
+                    box-shadow: 0 0 0 3px rgba(59,130,246,.1);
+                }
+
+                /* Botones */
+                .gpa-btn {
+                    padding: 9px 16px;
+                    border: none;
+                    border-radius: 8px;
+                    font-size: 13px;
+                    font-weight: 500;
+                    cursor: pointer;
+                    transition: all .2s;
+                    display: inline-flex;
+                    align-items: center;
+                    gap: 6px;
+                    font-family: inherit;
+                }
+                .gpa-btn:disabled { opacity: .6; cursor: not-allowed; }
+                .gpa-btn-primary { background: #1e3a5f; color: #fff; }
+                .gpa-btn-primary:hover:not(:disabled) { background: #16293f; }
+                .gpa-btn-info { background: #3b82f6; color: #fff; }
+                .gpa-btn-info:hover:not(:disabled) { background: #2563eb; }
+                .gpa-btn-warning { background: #e67e22; color: #fff; }
+                .gpa-btn-warning:hover:not(:disabled) { background: #d35400; }
+                .gpa-btn-danger { background: #dc2626; color: #fff; }
+                .gpa-btn-danger:hover:not(:disabled) { background: #b91c1c; }
+                .gpa-btn-secondary { background: #e5e7eb; color: #334155; }
+                .gpa-btn-secondary:hover:not(:disabled) { background: #d1d5db; }
+                .gpa-btn-sm { padding: 5px 12px; font-size: 12px; }
+
+                /* Tabla - forzado fondo blanco */
+                .gpa-tabla {
+                    width: 100%;
+                    border-collapse: collapse;
+                    font-size: 13px;
+                    background-color: #ffffff !important;
+                }
+                .gpa-tabla thead th {
+                    background-color: #f8fafc !important;
+                    background-image: none !important;
+                    color: #1e293b !important;
+                    padding: 12px 10px;
+                    text-align: left;
+                    font-size: 11px;
+                    text-transform: uppercase;
+                    letter-spacing: .5px;
+                    font-weight: 700;
+                    border-bottom: 2px solid #cbd5e1;
+                }
+                .gpa-tabla tbody tr {
+                    border-bottom: 1px solid #e2e8f0;
+                    background-color: #ffffff !important;
+                    background-image: none !important;
+                }
+                .gpa-tabla tbody tr:hover {
+                    background-color: #f1f5f9 !important;
+                }
+                .gpa-tabla td {
+                    padding: 12px 10px;
+                    color: #1e293b !important;
+                    vertical-align: middle;
+                    background-color: #ffffff !important;
+                    background-image: none !important;
+                }
+                .gpa-tabla tbody tr:hover td {
+                    background-color: #f1f5f9 !important;
+                }
+                .gpa-tabla td.col-anio { font-weight: 700; color: #0f172a !important; }
+                .gpa-tabla td.col-numero { text-align: center; font-weight: 600; color: #1e40af !important; }
+                .gpa-tabla td.col-nombre { font-weight: 600; color: #0f172a !important; }
+                .gpa-tabla td.col-fecha {
+                    font-family: monospace;
+                    font-size: 12px;
+                    color: #475569 !important;
+                }
+
+                .gpa-badge {
+                    display: inline-block;
+                    padding: 4px 12px;
+                    border-radius: 12px;
+                    font-size: 11px;
+                    font-weight: 600;
+                    text-transform: uppercase;
+                }
+
+                .gpa-aviso {
+                    padding: 12px 16px;
+                    border-radius: 8px;
+                    margin-bottom: 16px;
+                    font-size: 14px;
+                    font-weight: 500;
+                }
+                .gpa-aviso.success { background: #dcfce7; color: #15803d; border-left: 4px solid #16a34a; }
+                .gpa-aviso.error { background: #fee2e2; color: #b91c1c; border-left: 4px solid #dc2626; }
+
+                .gpa-empty {
+                    text-align: center;
+                    padding: 40px;
+                    color: #64748b;
+                    font-size: 14px;
+                    background: #ffffff;
+                }
+
+                .gpa-toolbar {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    flex-wrap: wrap;
+                    gap: 10px;
+                    margin-bottom: 16px;
+                }
+
+                .gpa-badge-filtros {
+                    display: inline-block;
+                    background: #3b82f6;
+                    color: #fff;
+                    font-size: 11px;
+                    font-weight: 600;
+                    padding: 2px 8px;
+                    border-radius: 10px;
+                    margin-left: 8px;
+                }
+
+                /* Modal */
+                .gpa-modal-overlay {
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(15,23,42,.55);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    z-index: 1000;
+                    padding: 20px;
+                }
+                .gpa-modal {
+                    background: #ffffff;
+                    border-radius: 12px;
+                    max-width: 560px;
+                    width: 100%;
+                    padding: 24px;
+                    max-height: 90vh;
+                    overflow-y: auto;
+                    box-shadow: 0 20px 25px -5px rgba(0,0,0,.1), 0 10px 10px -5px rgba(0,0,0,.04);
+                }
+                .gpa-modal-header {
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                    margin-bottom: 20px;
+                }
+                .gpa-modal-header h3 { margin: 0; font-size: 17px; color: #1e3a5f; }
+                .gpa-modal-close {
+                    background: none;
+                    border: none;
+                    font-size: 22px;
+                    cursor: pointer;
+                    color: #64748b;
+                    line-height: 1;
+                }
+                .gpa-modal-close:hover { color: #dc2626; }
+                .gpa-modal-actions {
+                    display: flex;
+                    gap: 10px;
+                    justify-content: flex-end;
+                    margin-top: 20px;
+                }
+
+                .gpa-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+                .gpa-form-grid-full { grid-column: 1 / -1; }
+
+                .gpa-info-box {
+                    background: #eff6ff;
+                    border-left: 4px solid #3b82f6;
+                    padding: 12px 16px;
+                    border-radius: 8px;
+                    margin-bottom: 16px;
+                    font-size: 13px;
+                    color: #1e40af;
+                }
+
+                .gpa-acciones { display: flex; gap: 6px; flex-wrap: wrap; }
+
+                @media (max-width: 900px) {
+                    .gpa-filtros { grid-template-columns: 1fr 1fr; }
+                    .gpa-form-grid { grid-template-columns: 1fr; }
+                }
+                @media (max-width: 600px) {
+                    .gpa-filtros { grid-template-columns: 1fr; }
+                    .gpa-tabla { font-size: 12px; }
+                    .gpa-tabla thead th, .gpa-tabla td { padding: 8px 6px; }
+                }
+            `}</style>
+
+            <div className="gpa-wrapper">
+                {mensaje && <div className={`gpa-aviso ${mensaje.tipo}`}>{mensaje.texto}</div>}
+
+                {/* PERIODO ACTIVO */}
+                {periodoActivo && (
+                    <div className="gpa-activo-card">
+                        <div className="gpa-activo-header">
+                            <span className="gpa-activo-indicador"></span>
+                            <h3>Periodo Activo Actual</h3>
+                        </div>
+                        <div className="gpa-activo-nombre">{periodoActivo.nombre}</div>
+                        <div className="gpa-activo-badge">
+                            Año Lectivo {periodoActivo.anioLectivo} - Periodo {periodoActivo.numeroPeriodo}
+                        </div>
+                        <div className="gpa-activo-info">
+                            <div className="gpa-activo-info-item">
+                                <span className="lbl">Fecha de Inicio</span>
+                                <span className="val">{formatearFecha(periodoActivo.fechaInicio)}</span>
+                            </div>
+                            <div className="gpa-activo-info-item">
+                                <span className="lbl">Fecha de Fin</span>
+                                <span className="val">{formatearFecha(periodoActivo.fechaFin)}</span>
+                            </div>
+                            <div className="gpa-activo-info-item">
+                                <span className="lbl">Días Restantes</span>
+                                <span className="val">
+                                    {diasRestantes !== null
+                                        ? (diasRestantes > 0 ? `${diasRestantes} días` : 'Vencido')
+                                        : '-'}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* ESTADÍSTICAS */}
+                <div className="gpa-stats">
+                    <div className="gpa-stat gpa-stat-total">
+                        <span className="num">{stats.total}</span>
+                        <span className="lbl">Total Periodos</span>
+                    </div>
+                    <div className="gpa-stat gpa-stat-activos">
+                        <span className="num">{stats.activos}</span>
+                        <span className="lbl">Activos</span>
+                    </div>
+                    <div className="gpa-stat gpa-stat-cerrados">
+                        <span className="num">{stats.cerrados}</span>
+                        <span className="lbl">Cerrados</span>
+                    </div>
                 </div>
 
-                <div className="table-responsive">
-                    <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                        <thead>
-                            <tr style={{ background: '#f1f5f9' }}>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Año</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Periodo</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Nombre</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Fecha Inicio</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Fecha Fin</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Estado</th>
-                                <th style={{ padding: '10px', textAlign: 'left' }}>Acciones</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {periodos.map((p) => (
-                                <tr key={p.idPeriodo} style={{ borderBottom: '1px solid #e5e7eb' }}>
-                                    <td style={{ padding: '8px' }}>{p.anioLectivo}</td>
-                                    <td style={{ padding: '8px' }}>{p.numeroPeriodo}</td>
-                                    <td style={{ padding: '8px' }}><strong>{p.nombre}</strong></td>
-                                    <td style={{ padding: '8px' }}>{new Date(p.fechaInicio).toLocaleDateString()}</td>
-                                    <td style={{ padding: '8px' }}>{new Date(p.fechaFin).toLocaleDateString()}</td>
-                                    <td style={{ padding: '8px' }}>
-                                        <span style={{
-                                            padding: '4px 12px',
-                                            borderRadius: '12px',
-                                            fontSize: '12px',
-                                            fontWeight: 'bold',
-                                            backgroundColor: getEstadoColor(p.estado),
-                                            color: '#fff'
-                                        }}>
-                                            {p.estado}
-                                        </span>
-                                    </td>
-                                    <td style={{ padding: '8px' }}>
-                                        <button
-                                            className="btn-edit"
-                                            onClick={() => handleOpenModal(p)}
-                                            style={{ padding: '4px 12px', marginRight: '4px', background: '#3b82f6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                        >
-                                            Editar
-                                        </button>
-                                        <button
-                                            className="btn-primary"
-                                            onClick={() => handleToggleEstado(p)}
-                                            style={{ padding: '4px 12px', marginRight: '4px', background: '#e67e22', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                        >
-                                            {p.estado === 'Activo' ? 'Desactivar' : 'Activar'}
-                                        </button>
-                                        <button
-                                            className="btn-danger"
-                                            onClick={() => handleDelete(p.idPeriodo, p.nombre)}
-                                            style={{ padding: '4px 12px', background: '#dc2626', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
-                                        >
-                                            Eliminar
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
+                {/* FILTROS */}
+                <div className="gpa-card">
+                    <h3>
+                        Filtros de Búsqueda
+                        {filtrosActivos > 0 && (
+                            <span className="gpa-badge-filtros">
+                                {filtrosActivos} filtro{filtrosActivos !== 1 ? 's' : ''} activo{filtrosActivos !== 1 ? 's' : ''}
+                            </span>
+                        )}
+                    </h3>
+                    <div className="gpa-filtros">
+                        <div className="gpa-field">
+                            <label>Año Lectivo</label>
+                            <select value={filterAnio} onChange={(e) => setFilterAnio(e.target.value)}>
+                                <option value="">Todos los años</option>
+                                {aniosUnicos.map(a => (
+                                    <option key={a} value={a}>{a}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="gpa-field">
+                            <label>Estado</label>
+                            <select value={filterEstado} onChange={(e) => setFilterEstado(e.target.value)}>
+                                <option value="todos">Todos</option>
+                                <option value="activos">Solo activos</option>
+                                <option value="cerrados">Solo cerrados</option>
+                            </select>
+                        </div>
+                        <div className="gpa-field">
+                            <label>Buscar</label>
+                            <input
+                                type="text"
+                                placeholder="Buscar por nombre o número de periodo..."
+                                value={busqueda}
+                                onChange={(e) => setBusqueda(e.target.value)}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="gpa-toolbar" style={{ marginTop: '14px', marginBottom: 0 }}>
+                        <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                            <button className="gpa-btn gpa-btn-primary" onClick={() => handleOpenModal()}>
+                                Nuevo Periodo
+                            </button>
+                            {filtrosActivos > 0 && (
+                                <button className="gpa-btn gpa-btn-secondary" onClick={limpiarFiltros}>
+                                    Limpiar Filtros
+                                </button>
+                            )}
+                        </div>
+                        <div style={{ fontSize: '13px', color: '#64748b' }}>
+                            Mostrando <strong>{periodosFiltrados.length}</strong> de {periodos.length} periodos
+                        </div>
+                    </div>
+                </div>
+
+                {/* TABLA */}
+                <div className="gpa-card">
+                    <h3>Lista de Periodos Académicos</h3>
+
+                    {periodosFiltrados.length === 0 ? (
+                        <div className="gpa-empty">
+                            No hay periodos que coincidan. Prueba ajustando los filtros o crea uno nuevo.
+                        </div>
+                    ) : (
+                        <div className="table-responsive">
+                            <table className="gpa-tabla">
+                                <thead>
+                                    <tr>
+                                        <th style={{ width: '80px' }}>Año</th>
+                                        <th style={{ width: '70px', textAlign: 'center' }}>N°</th>
+                                        <th>Nombre</th>
+                                        <th style={{ width: '120px' }}>Fecha Inicio</th>
+                                        <th style={{ width: '120px' }}>Fecha Fin</th>
+                                        <th style={{ width: '110px' }}>Estado</th>
+                                        <th style={{ width: '240px' }}>Acciones</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {periodosFiltrados.map((p) => {
+                                        const badge = getEstadoBadge(p.estado);
+                                        return (
+                                            <tr key={p.idPeriodo}>
+                                                <td className="col-anio">{p.anioLectivo}</td>
+                                                <td className="col-numero">{p.numeroPeriodo}</td>
+                                                <td className="col-nombre">{p.nombre}</td>
+                                                <td className="col-fecha">{formatearFecha(p.fechaInicio)}</td>
+                                                <td className="col-fecha">{formatearFecha(p.fechaFin)}</td>
+                                                <td>
+                                                    <span
+                                                        className="gpa-badge"
+                                                        style={{
+                                                            backgroundColor: badge.bg,
+                                                            color: badge.color,
+                                                            border: `1px solid ${badge.border}`
+                                                        }}
+                                                    >
+                                                        {p.estado}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div className="gpa-acciones">
+                                                        <button
+                                                            className="gpa-btn gpa-btn-info gpa-btn-sm"
+                                                            onClick={() => handleOpenModal(p)}
+                                                        >
+                                                            Editar
+                                                        </button>
+                                                        <button
+                                                            className={`gpa-btn ${p.estado === 'Activo' ? 'gpa-btn-warning' : 'gpa-btn-primary'} gpa-btn-sm`}
+                                                            onClick={() => handleToggleEstado(p)}
+                                                            disabled={saving}
+                                                        >
+                                                            {p.estado === 'Activo' ? 'Desactivar' : 'Activar'}
+                                                        </button>
+                                                        <button
+                                                            className="gpa-btn gpa-btn-danger gpa-btn-sm"
+                                                            onClick={() => handleDelete(p.idPeriodo, p.nombre)}
+                                                        >
+                                                            Eliminar
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
                 </div>
             </div>
 
+            {/* MODAL CREAR / EDITAR */}
             {showModal && (
-                <div className="modal-overlay" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
-                    <div className="modal-container" style={{ background: '#fff', borderRadius: '12px', maxWidth: '500px', width: '100%', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
-                        <div className="modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <div className="gpa-modal-overlay" onClick={handleCerrarModal}>
+                    <div className="gpa-modal" onClick={e => e.stopPropagation()}>
+                        <div className="gpa-modal-header">
                             <h3>{editingPeriodo ? 'Editar Periodo' : 'Nuevo Periodo'}</h3>
-                            <button className="modal-close" onClick={() => setShowModal(false)} style={{ background: 'none', border: 'none', fontSize: '24px', cursor: 'pointer' }}>X</button>
+                            <button className="gpa-modal-close" onClick={handleCerrarModal} disabled={saving}>X</button>
                         </div>
+
+                        <div className="gpa-info-box">
+                            Solo puede haber <strong>un periodo activo por año lectivo</strong>.
+                            El periodo activo es el que se usa por defecto para registrar notas y asistencias.
+                        </div>
+
                         <form onSubmit={handleSubmit}>
-                            <div className="form-group" style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Año Lectivo *</label>
-                                <input
-                                    type="number"
-                                    value={formData.anioLectivo}
-                                    onChange={(e) => setFormData({ ...formData, anioLectivo: parseInt(e.target.value) })}
-                                    required
-                                    className="form-control"
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                                />
-                            </div>
-                            <div className="form-group" style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Numero de Periodo *</label>
-                                <input
-                                    type="number"
-                                    value={formData.numeroPeriodo}
-                                    onChange={(e) => setFormData({ ...formData, numeroPeriodo: parseInt(e.target.value) })}
-                                    required
-                                    className="form-control"
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                                    min="1"
-                                    max="4"
-                                />
-                            </div>
-                            <div className="form-group" style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Nombre *</label>
-                                <input
-                                    type="text"
-                                    value={formData.nombre}
-                                    onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
-                                    required
-                                    className="form-control"
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
-                                />
-                            </div>
-                            <div className="form-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '12px' }}>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Fecha Inicio *</label>
+                            <div className="gpa-form-grid">
+                                <div className="gpa-field">
+                                    <label>Año Lectivo *</label>
+                                    <input
+                                        type="number"
+                                        value={formData.anioLectivo}
+                                        onChange={(e) => setFormData({ ...formData, anioLectivo: parseInt(e.target.value) || new Date().getFullYear() })}
+                                        required
+                                        min="2020"
+                                        max="2100"
+                                    />
+                                </div>
+                                <div className="gpa-field">
+                                    <label>Número de Periodo *</label>
+                                    <input
+                                        type="number"
+                                        value={formData.numeroPeriodo}
+                                        onChange={(e) => setFormData({ ...formData, numeroPeriodo: parseInt(e.target.value) || 1 })}
+                                        required
+                                        min="1"
+                                        max="4"
+                                    />
+                                </div>
+
+                                <div className="gpa-field gpa-form-grid-full">
+                                    <label>Nombre del Periodo *</label>
+                                    <input
+                                        type="text"
+                                        value={formData.nombre}
+                                        onChange={(e) => setFormData({ ...formData, nombre: e.target.value })}
+                                        required
+                                        placeholder="Ej: I Periodo, II Periodo..."
+                                    />
+                                </div>
+
+                                <div className="gpa-field">
+                                    <label>Fecha de Inicio *</label>
                                     <input
                                         type="date"
                                         value={formData.fechaInicio}
                                         onChange={(e) => setFormData({ ...formData, fechaInicio: e.target.value })}
                                         required
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                                     />
                                 </div>
-                                <div className="form-group">
-                                    <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Fecha Fin *</label>
+                                <div className="gpa-field">
+                                    <label>Fecha de Fin *</label>
                                     <input
                                         type="date"
                                         value={formData.fechaFin}
                                         onChange={(e) => setFormData({ ...formData, fechaFin: e.target.value })}
                                         required
-                                        className="form-control"
-                                        style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
                                     />
                                 </div>
+
+                                <div className="gpa-field gpa-form-grid-full">
+                                    <label>Estado</label>
+                                    <select
+                                        value={formData.estado}
+                                        onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
+                                    >
+                                        <option value="Cerrado">Cerrado</option>
+                                        <option value="Activo">Activo</option>
+                                    </select>
+                                    <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                                        Solo puede haber un periodo activo por año lectivo
+                                    </small>
+                                </div>
                             </div>
-                            <div className="form-group" style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '4px', fontWeight: '500' }}>Estado</label>
-                                <select
-                                    value={formData.estado}
-                                    onChange={(e) => setFormData({ ...formData, estado: e.target.value })}
-                                    className="form-control"
-                                    style={{ width: '100%', padding: '8px', border: '1px solid #ddd', borderRadius: '6px' }}
+
+                            <div className="gpa-modal-actions">
+                                <button
+                                    type="button"
+                                    className="gpa-btn gpa-btn-secondary"
+                                    onClick={handleCerrarModal}
+                                    disabled={saving}
                                 >
-                                    <option value="Cerrado">Cerrado</option>
-                                    <option value="Activo">Activo</option>
-                                </select>
-                                <small style={{ color: '#6b7280' }}>Solo puede haber un periodo activo por año</small>
-                            </div>
-                            <div className="modal-buttons" style={{ display: 'flex', gap: '12px', marginTop: '20px', justifyContent: 'flex-end' }}>
-                                <button type="button" className="btn-cancel" onClick={() => setShowModal(false)} style={{ padding: '8px 20px', background: '#e5e7eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancelar</button>
-                                <button type="submit" className="btn-primary" style={{ padding: '8px 20px', background: '#1e3a5f', color: '#fff', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-                                    {editingPeriodo ? 'Actualizar' : 'Crear'}
+                                    Cancelar
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="gpa-btn gpa-btn-primary"
+                                    disabled={saving}
+                                >
+                                    {saving ? 'Guardando...' : (editingPeriodo ? 'Actualizar' : 'Crear Periodo')}
                                 </button>
                             </div>
                         </form>
@@ -358,4 +915,4 @@ const GestionPeriodosDireccion = () => {
     );
 };
 
-export default GestionPeriodosDireccion;
+export default GestionPeriodosAdmin;

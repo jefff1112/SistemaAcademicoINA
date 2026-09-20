@@ -120,6 +120,10 @@ public class ApplicationDbContext : DbContext
     // Reportes de datos incorrectos de estudiantes
     public DbSet<ReporteDatoEstudiante> ReportesDatosEstudiante { get; set; }
 
+    //Paginas Publicas Modificar
+    public DbSet<ContenidoPublico> ContenidoPublico { get; set; }
+    public DbSet<ImagenPublica> ImagenesPublicas { get; set; }
+
     // Configuración del modelo: índices únicos y compuestos, índices de rendimiento, precisiones decimales y mapeos de tablas.
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

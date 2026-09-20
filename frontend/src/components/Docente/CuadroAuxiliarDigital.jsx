@@ -1,6 +1,6 @@
 // CuadroAuxiliarDigital (Docente): cuadro de notas tipo Excel INA
 // Sección MIXTA: Materias Básicas y Módulos
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import DashboardLayout from '../Layout/DashboardLayout';
 import API from '../../services/api';
 import calificacionesSubActividadesService from '../../services/calificacionesSubActividadesService';
@@ -16,7 +16,7 @@ const CuadroAuxiliarDigital = () => {
     const [cuadroCompleto, setCuadroCompleto] = useState(null);
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
-    const [message, setMessage] = useState({ type: '', text: '' });
+    const [mensaje, setMensaje] = useState(null);
     const [notasEditadas, setNotasEditadas] = useState({});
     const [mostrarModalExportacion, setMostrarModalExportacion] = useState(false);
 
@@ -30,6 +30,9 @@ const CuadroAuxiliarDigital = () => {
 
     const debounceTimers = useRef({});
 
+    // ============================================================
+    // CARGA DE DATOS
+    // ============================================================
     useEffect(() => {
         cargarMisClases();
     }, []);
@@ -53,29 +56,23 @@ const CuadroAuxiliarDigital = () => {
         }
     };
 
-    // ============ CARGAR CUANDO CAMBIAN FILTROS ============
+    // ============================================================
+    // CARGAR CUADRO CUANDO CAMBIAN FILTROS
+    // ============================================================
     useEffect(() => {
         const { idClase, tipo, idMateria, idEspecialidad, idPeriodo } = filtros;
 
-        if (!idClase) {
+        if (!idClase || !tipo) {
             setCuadroCompleto(null);
             return;
         }
-        if (!tipo) {
+        if (tipo === 'materia' && (!idMateria || !idPeriodo)) {
             setCuadroCompleto(null);
             return;
         }
-        if (tipo === 'materia') {
-            if (!idMateria || !idPeriodo) {
-                setCuadroCompleto(null);
-                return;
-            }
-        }
-        if (tipo === 'modulo') {
-            if (!idEspecialidad) {
-                setCuadroCompleto(null);
-                return;
-            }
+        if (tipo === 'modulo' && !idEspecialidad) {
+            setCuadroCompleto(null);
+            return;
         }
 
         cargarCuadroCompleto();
@@ -106,6 +103,9 @@ const CuadroAuxiliarDigital = () => {
         }
     };
 
+    // ============================================================
+    // EDICIÓN DE NOTAS
+    // ============================================================
     const handleNotaChange = useCallback((idEstudiante, idSubActividad, valor, esRecuperacion = false) => {
         const key = `${idEstudiante}_${idSubActividad}`;
         const nota = valor === '' ? null : parseFloat(valor);
@@ -236,6 +236,9 @@ const CuadroAuxiliarDigital = () => {
         }
     };
 
+    // ============================================================
+    // EXPORTACIÓN
+    // ============================================================
     const puedeExportar = () => {
         const rolesPermitidos = ['Administrador', 'Director', 'Sub Director', 'Registro Academico', 'Docente'];
         return rolesPermitidos.includes(user?.rol);
@@ -293,9 +296,12 @@ const CuadroAuxiliarDigital = () => {
         }
     };
 
-    const mostrarMensaje = (type, text) => {
-        setMessage({ type, text });
-        setTimeout(() => setMessage({ type: '', text: '' }), 5000);
+    // ============================================================
+    // HELPERS
+    // ============================================================
+    const mostrarMensaje = (tipo, texto) => {
+        setMensaje({ tipo, texto });
+        setTimeout(() => setMensaje(null), 5000);
     };
 
     const totalNotasEditadas = Object.keys(notasEditadas).length;
@@ -316,6 +322,15 @@ const CuadroAuxiliarDigital = () => {
         return 'Muy deficiente';
     };
 
+    // Resumen de en recuperación
+    const estudiantesEnRecuperacion = useMemo(() => {
+        if (!cuadroCompleto?.filas) return 0;
+        return cuadroCompleto.filas.filter(f => estaEnRecuperacion(f.promedioFinal)).length;
+    }, [cuadroCompleto]);
+
+    // ============================================================
+    // RENDER
+    // ============================================================
     return (
         <DashboardLayout>
             <div className="cuadro-auxiliar-container">
@@ -324,119 +339,149 @@ const CuadroAuxiliarDigital = () => {
                     <p>Ingrese las notas directamente en las celdas del cuadro</p>
                 </div>
 
-                {message.text && (
-                    <div className={`alert alert-${message.type}`}>
-                        {message.text}
-                        <button onClick={() => setMessage({ type: '', text: '' })} className="btn-close-alert">×</button>
+                {mensaje && (
+                    <div
+                        className={`cuadro-aviso ${mensaje.tipo}`}
+                        style={{
+                            padding: '12px 16px',
+                            borderRadius: '8px',
+                            marginBottom: '16px',
+                            fontSize: '14px',
+                            fontWeight: 500,
+                            backgroundColor: mensaje.tipo === 'success' ? '#dcfce7' : mensaje.tipo === 'warning' ? '#fef3c7' : '#fee2e2',
+                            color: mensaje.tipo === 'success' ? '#15803d' : mensaje.tipo === 'warning' ? '#b45309' : '#b91c1c',
+                            borderLeft: `4px solid ${mensaje.tipo === 'success' ? '#16a34a' : mensaje.tipo === 'warning' ? '#e67e22' : '#dc2626'}`
+                        }}
+                    >
+                        {mensaje.texto}
+                        <button
+                            onClick={() => setMensaje(null)}
+                            style={{
+                                float: 'right',
+                                background: 'none',
+                                border: 'none',
+                                fontSize: '18px',
+                                cursor: 'pointer',
+                                color: 'inherit',
+                                lineHeight: 1
+                            }}
+                        >
+                            ×
+                        </button>
                     </div>
                 )}
 
-                <div className="filtros-container">
-                    <div className="filtro-grupo">
-                        <label>Clase:</label>
-                        <select
-                            value={filtros.idClase}
-                            onChange={e => setFiltros({
-                                idClase: e.target.value,
-                                tipo: '',
-                                idMateria: '',
-                                idEspecialidad: '',
-                                idPeriodo: filtros.idPeriodo
-                            })}
-                        >
-                            <option value="">-- Seleccione clase --</option>
-                            {clases.map(c => (
-                                <option key={c.idClase} value={c.idClase}>
-                                    {c.nivel} - {c.nombreClase} {c.seccion}
-                                    {c.esEspecialidad ? ' [Especialidad]' : ''}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {claseActual && (
-                        <div className="filtro-grupo">
-                            <label>Tipo:</label>
+                {/* FILTROS */}
+                <div className="cuadro-filtros-card">
+                    <h3>Filtros de Búsqueda</h3>
+                    <div className="cuadro-filtros-grid">
+                        <div className="cuadro-field">
+                            <label>Clase</label>
                             <select
-                                value={filtros.tipo}
-                                onChange={e => {
-                                    const tipo = e.target.value;
-                                    setFiltros({
-                                        ...filtros,
-                                        tipo,
-                                        idMateria: '',
-                                        idEspecialidad: tipo === 'modulo' ? String(claseActual?.especialidad?.id ?? '') : ''
-                                    });
-                                }}
+                                value={filtros.idClase}
+                                onChange={e => setFiltros({
+                                    idClase: e.target.value,
+                                    tipo: '',
+                                    idMateria: '',
+                                    idEspecialidad: '',
+                                    idPeriodo: filtros.idPeriodo
+                                })}
                             >
-                                <option value="">-- Seleccione --</option>
-                                {materiasDisponibles.length > 0 && (
-                                    <option value="materia">Materias Básicas</option>
-                                )}
-                                {esEspecialidadClase && (
-                                    <option value="modulo">Módulos (Especialidad)</option>
-                                )}
-                            </select>
-                        </div>
-                    )}
-
-                    {filtros.tipo === 'materia' && (
-                        <div className="filtro-grupo">
-                            <label>Materia:</label>
-                            <select
-                                value={filtros.idMateria}
-                                onChange={e => setFiltros({ ...filtros, idMateria: e.target.value })}
-                            >
-                                <option value="">-- Seleccione --</option>
-                                {materiasDisponibles.map(m => (
-                                    <option key={m.idMateria} value={m.idMateria}>{m.nombreMateria}</option>
-                                ))}
-                            </select>
-                        </div>
-                    )}
-
-                    {filtros.tipo === 'modulo' && claseActual?.especialidad && (
-                        <div className="filtro-grupo">
-                            <label>Especialidad:</label>
-                            <select
-                                value={filtros.idEspecialidad}
-                                onChange={e => setFiltros({ ...filtros, idEspecialidad: e.target.value })}
-                            >
-                                <option value="">-- Seleccione --</option>
-                                <option value={claseActual.especialidad.id}>{claseActual.especialidad.nombre}</option>
-                            </select>
-                        </div>
-                    )}
-
-                    {filtros.tipo === 'materia' && (
-                        <div className="filtro-grupo">
-                            <label>Período:</label>
-                            <select
-                                value={filtros.idPeriodo}
-                                onChange={e => setFiltros({ ...filtros, idPeriodo: e.target.value })}
-                            >
-                                <option value="">-- Seleccione --</option>
-                                {periodos.map(p => (
-                                    <option key={p.idPeriodo} value={p.idPeriodo}>
-                                        {p.nombrePeriodo} ({p.anioLectivo}) {p.estado === 'Activo' ? '✓' : ''}
+                                <option value="">-- Seleccione clase --</option>
+                                {clases.map(c => (
+                                    <option key={c.idClase} value={c.idClase}>
+                                        {c.nivel} - {c.nombreClase} {c.seccion}
+                                        {c.esEspecialidad ? ' [Especialidad]' : ''}
                                     </option>
                                 ))}
                             </select>
                         </div>
-                    )}
+
+                        {claseActual && (
+                            <div className="cuadro-field">
+                                <label>Tipo</label>
+                                <select
+                                    value={filtros.tipo}
+                                    onChange={e => {
+                                        const tipo = e.target.value;
+                                        setFiltros({
+                                            ...filtros,
+                                            tipo,
+                                            idMateria: '',
+                                            idEspecialidad: tipo === 'modulo' ? String(claseActual?.especialidad?.id ?? '') : ''
+                                        });
+                                    }}
+                                >
+                                    <option value="">-- Seleccione --</option>
+                                    {materiasDisponibles.length > 0 && (
+                                        <option value="materia">Materias Básicas</option>
+                                    )}
+                                    {esEspecialidadClase && (
+                                        <option value="modulo">Módulos (Especialidad)</option>
+                                    )}
+                                </select>
+                            </div>
+                        )}
+
+                        {filtros.tipo === 'materia' && (
+                            <>
+                                <div className="cuadro-field">
+                                    <label>Materia</label>
+                                    <select
+                                        value={filtros.idMateria}
+                                        onChange={e => setFiltros({ ...filtros, idMateria: e.target.value })}
+                                    >
+                                        <option value="">-- Seleccione --</option>
+                                        {materiasDisponibles.map(m => (
+                                            <option key={m.idMateria} value={m.idMateria}>{m.nombreMateria}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="cuadro-field">
+                                    <label>Período</label>
+                                    <select
+                                        value={filtros.idPeriodo}
+                                        onChange={e => setFiltros({ ...filtros, idPeriodo: e.target.value })}
+                                    >
+                                        <option value="">-- Seleccione --</option>
+                                        {periodos.map(p => (
+                                            <option key={p.idPeriodo} value={p.idPeriodo}>
+                                                {p.nombrePeriodo} ({p.anioLectivo}) {p.estado === 'Activo' ? '- Activo' : ''}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </>
+                        )}
+
+                        {filtros.tipo === 'modulo' && claseActual?.especialidad && (
+                            <div className="cuadro-field">
+                                <label>Especialidad</label>
+                                <select
+                                    value={filtros.idEspecialidad}
+                                    onChange={e => setFiltros({ ...filtros, idEspecialidad: e.target.value })}
+                                >
+                                    <option value="">-- Seleccione --</option>
+                                    <option value={claseActual.especialidad.id}>{claseActual.especialidad.nombre}</option>
+                                </select>
+                            </div>
+                        )}
+                    </div>
                 </div>
 
+                {/* ACCIONES */}
                 {cuadroCompleto && (
-                    <div className="acciones-container">
+                    <div className="cuadro-acciones">
                         <button
-                            className="btn btn-primary"
+                            className="cuadro-btn cuadro-btn-primary"
                             onClick={handleGuardarTodas}
                             disabled={saving || totalNotasEditadas === 0}
                         >
                             Guardar Cambios ({totalNotasEditadas})
                         </button>
                         <button
-                            className="btn btn-secondary"
+                            className="cuadro-btn cuadro-btn-secondary"
                             onClick={cargarCuadroCompleto}
                             disabled={loading}
                         >
@@ -444,7 +489,7 @@ const CuadroAuxiliarDigital = () => {
                         </button>
                         {puedeExportar() && (
                             <button
-                                className="btn btn-success"
+                                className="cuadro-btn cuadro-btn-success"
                                 onClick={() => setMostrarModalExportacion(true)}
                             >
                                 Exportar Excel
@@ -453,8 +498,9 @@ const CuadroAuxiliarDigital = () => {
                     </div>
                 )}
 
+                {/* CUADRO */}
                 <div className="cuadro-wrapper">
-                    {loading && <div className="loading-overlay">Cargando...</div>}
+                    {loading && <div className="cuadro-loading">Cargando...</div>}
 
                     {cuadroCompleto?.filas?.length > 0 && (
                         <div className="cuadro-ina">
@@ -462,7 +508,7 @@ const CuadroAuxiliarDigital = () => {
                                 <div className="titulo-instituto">{cuadroCompleto.header?.instituto || 'INSTITUTO NACIONAL DE APOPA'}</div>
                                 <div className="subtitulo">
                                     <span>{cuadroCompleto.header?.titulo || 'CUADRO AUXILIAR'}</span>
-                                    <span className="anio-lectivo">AÑO LECTIVO: {cuadroCompleto.header?.anioLectivo || new Date().getFullYear()}__</span>
+                                    <span className="anio-lectivo">AÑO LECTIVO: {cuadroCompleto.header?.anioLectivo || new Date().getFullYear()}</span>
                                 </div>
                                 <div className="datos-generales">
                                     <div className="dato"><strong>ASIGNATURA:</strong> {cuadroCompleto.header?.asignatura || '---'}</div>
@@ -608,8 +654,7 @@ const CuadroAuxiliarDigital = () => {
                                 <div className="resumen-item"><strong>Total Actividades:</strong> {cuadroCompleto.header?.actividades?.length || 0}</div>
                                 <div className="resumen-item"><strong>Es Módulo:</strong> {cuadroCompleto.esModulo ? 'Sí' : 'No'}</div>
                                 <div className="resumen-item">
-                                    <strong>En Recuperación:</strong>{' '}
-                                    {cuadroCompleto.filas.filter(f => estaEnRecuperacion(f.promedioFinal)).length} estudiante(s)
+                                    <strong>En Recuperación:</strong> {estudiantesEnRecuperacion} estudiante(s)
                                 </div>
                             </div>
 
@@ -622,7 +667,7 @@ const CuadroAuxiliarDigital = () => {
                     )}
 
                     {!loading && !cuadroCompleto && filtros.idClase && (
-                        <div className="empty-state">
+                        <div className="cuadro-empty">
                             <h3>Seleccione una opción</h3>
                             <p>
                                 {!filtros.tipo
@@ -637,38 +682,45 @@ const CuadroAuxiliarDigital = () => {
                     )}
 
                     {!filtros.idClase && (
-                        <div className="empty-state">
+                        <div className="cuadro-empty">
                             <h3>Bienvenido al Cuadro Auxiliar</h3>
                             <p>Seleccione una clase y el tipo (Materias Básicas o Módulos).</p>
                         </div>
                     )}
                 </div>
 
+                {/* MODAL EXPORTACIÓN */}
                 {mostrarModalExportacion && (
-                    <div className="modal-overlay" onClick={() => setMostrarModalExportacion(false)}>
-                        <div className="modal-content" onClick={e => e.stopPropagation()}>
-                            <div className="modal-header">
+                    <div className="cuadro-modal-overlay" onClick={() => setMostrarModalExportacion(false)}>
+                        <div className="cuadro-modal" onClick={e => e.stopPropagation()}>
+                            <div className="cuadro-modal-header">
                                 <h3>Exportar a Excel</h3>
-                                <button onClick={() => setMostrarModalExportacion(false)} className="btn-close">×</button>
+                                <button onClick={() => setMostrarModalExportacion(false)} className="cuadro-modal-close">X</button>
                             </div>
-                            <div className="modal-body">
-                                <button className="btn-export" onClick={() => handleExportar('resumen-promedios')}>
-                                    1. Resumen de Promedios (solo notas finales)
+                            <div className="cuadro-modal-body">
+                                <button className="cuadro-btn-export" onClick={() => handleExportar('resumen-promedios')}>
+                                    <span className="cuadro-btn-export-num">1</span>
+                                    <span className="cuadro-btn-export-txt">Resumen de Promedios (solo notas finales)</span>
                                 </button>
-                                <button className="btn-export" onClick={() => handleExportar('clase-materia-periodo')}>
-                                    2. Clase + Materia + 1 Período (con actividades)
+                                <button className="cuadro-btn-export" onClick={() => handleExportar('clase-materia-periodo')}>
+                                    <span className="cuadro-btn-export-num">2</span>
+                                    <span className="cuadro-btn-export-txt">Clase + Materia + 1 Período (con actividades)</span>
                                 </button>
-                                <button className="btn-export" onClick={() => handleExportar('todas-periodos')}>
-                                    3. Clase + Materia + Todos los Períodos (con actividades)
+                                <button className="cuadro-btn-export" onClick={() => handleExportar('todas-periodos')}>
+                                    <span className="cuadro-btn-export-num">3</span>
+                                    <span className="cuadro-btn-export-txt">Clase + Materia + Todos los Períodos (con actividades)</span>
                                 </button>
-                                <button className="btn-export" onClick={() => handleExportar('todas-materias')}>
-                                    4. Clase + Todas las Materias + 1 Período (con actividades)
+                                <button className="cuadro-btn-export" onClick={() => handleExportar('todas-materias')}>
+                                    <span className="cuadro-btn-export-num">4</span>
+                                    <span className="cuadro-btn-export-txt">Clase + Todas las Materias + 1 Período (con actividades)</span>
                                 </button>
-                                <button className="btn-export" onClick={() => handleExportar('clase-completa')}>
-                                    5. Clase + Todas las Materias + Todos los Períodos (con actividades)
+                                <button className="cuadro-btn-export" onClick={() => handleExportar('clase-completa')}>
+                                    <span className="cuadro-btn-export-num">5</span>
+                                    <span className="cuadro-btn-export-txt">Clase + Todas las Materias + Todos los Períodos (con actividades)</span>
                                 </button>
-                                <button className="btn-export" onClick={() => handleExportar('consolidado')}>
-                                    6. Consolidado Anual (por Nivel)
+                                <button className="cuadro-btn-export" onClick={() => handleExportar('consolidado')}>
+                                    <span className="cuadro-btn-export-num">6</span>
+                                    <span className="cuadro-btn-export-txt">Consolidado Anual (por Nivel)</span>
                                 </button>
                             </div>
                         </div>
