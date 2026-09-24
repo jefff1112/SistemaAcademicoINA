@@ -99,21 +99,23 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 builder.Services.AddAuthorization();
 
 // ============================================================
-// 7. CORS (permite el frontend en desarrollo)
+// 7. CORS (permite el frontend en desarrollo y producción)
 // ============================================================
+// Leer orígenes permitidos desde variable de entorno (separados por coma)
+// Ej: FRONTEND_URLS=https://mi-frontend.onrender.com,http://localhost:3000
+var corsOrigins = builder.Configuration["FRONTEND_URLS"]?
+    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    ?? new[] { "http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001" };
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend",
         policy =>
         {
-            policy.WithOrigins(
-                    "http://localhost:3000",
-                    "http://localhost:3001",
-                    "http://127.0.0.1:3000",
-                    "http://127.0.0.1:3001")
+            policy.WithOrigins(corsOrigins)
                   .AllowAnyMethod()
                   .AllowAnyHeader()
-                  .AllowCredentials();  // Necesario si usas cookies o auth basada en credenciales
+                  .AllowCredentials();
         });
 });
 
@@ -174,6 +176,13 @@ builder.Services.AddSwaggerGen(c =>
 // CONSTRUCCIÓN DE LA APP
 // ============================================================
 var app = builder.Build();
+
+// ============================================================
+// CONFIGURACIÓN DE PUERTO PARA RENDER (lee variable PORT)
+// ============================================================
+var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
+app.Urls.Clear();
+app.Urls.Add($"http://0.0.0.0:{port}");
 
 // ============================================================
 // PIPELINE DE MIDDLEWARE
