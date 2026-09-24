@@ -65,12 +65,12 @@ const Login = () => {
                         {error && <div className="login-error">{error}</div>}
 
                         <div className="form-group">
-                            <label>Código</label>
+                            <label>Código o Correo electrónico</label>
                             <input
                                 type="text"
                                 value={codigo}
                                 onChange={(e) => setCodigo(e.target.value)}
-                                placeholder="Ingresa tu código"
+                                placeholder="Ingresa tu código o correo"
                                 required
                                 autoFocus
                             />

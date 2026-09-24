@@ -296,91 +296,70 @@ const CuadroAuxiliarDireccion = () => {
     return (
         <DashboardLayout title="Cuadro Auxiliar de Notas - Dirección">
             <style>{`
+                /* Unificación con Paleta INA */
                 .cad-container { display: flex; flex-direction: column; gap: 20px; }
-                .cad-card { background: #fff; border-radius: 12px; padding: 22px; box-shadow: 0 2px 10px rgba(0,0,0,.06); border: 1px solid #e2e8f0; }
-                .cad-card h3 { margin: 0 0 16px; color: #1e3a5f; font-size: 18px; }
+                .cad-card { 
+                    background: var(--ina-bg, #EEF1F9); 
+                    border-radius: 12px; 
+                    padding: 22px; 
+                    box-shadow: 0 2px 10px rgba(26, 46, 107, 0.08); 
+                    border: 1px solid #D5DBEF; 
+                }
+                .cad-card h3 { margin: 0 0 16px; color: var(--ina-deep, #1A2E6B); font-size: 18px; }
 
                 .cad-header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px; }
-                .cad-header h1 { margin: 0; color: #1e3a5f; font-size: 22px; }
+                .cad-header h1 { margin: 0; color: var(--ina-deep, #1A2E6B); font-size: 22px; }
                 .cad-header p { margin: 4px 0 0; color: #64748b; font-size: 14px; }
 
                 .cad-filtros { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
                 .cad-field label { display: block; font-weight: 600; color: #34495e; font-size: 13px; margin-bottom: 6px; }
-                .cad-field select, .cad-field input {
-                    width: 100%; padding: 9px 12px; border: 1px solid #cbd5e1;
-                    border-radius: 8px; font-size: 14px; box-sizing: border-box;
-                    font-family: inherit; transition: border-color .2s, box-shadow .2s;
-                }
-                .cad-field select:focus, .cad-field input:focus {
-                    outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.1);
-                }
-
+                
                 .cad-btn {
                     padding: 9px 16px; border: none; border-radius: 8px;
-                    font-size: 13px; font-weight: 500; cursor: pointer;
-                    transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+                    font-size: 13px; font-weight: 600; cursor: pointer;
+                    transition: all 0.2s; display: inline-flex; align-items: center; gap: 6px;
                 }
-                .cad-btn:disabled { opacity: .6; cursor: not-allowed; }
-                .cad-btn-primary { background: #1e3a5f; color: #fff; }
-                .cad-btn-primary:hover:not(:disabled) { background: #16293f; }
-                .cad-btn-success { background: #16a34a; color: #fff; }
-                .cad-btn-success:hover:not(:disabled) { background: #15803d; }
-                .cad-btn-secondary { background: #e5e7eb; color: #334155; }
-                .cad-btn-secondary:hover:not(:disabled) { background: #d1d5db; }
-                .cad-btn-info { background: #3b82f6; color: #fff; }
-                .cad-btn-info:hover:not(:disabled) { background: #2563eb; }
+                .cad-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+                .cad-btn-primary { background: var(--ina-blue, #2B47B8); color: #fff; }
+                .cad-btn-primary:hover:not(:disabled) { background: var(--ina-deep, #1A2E6B); }
+                .cad-btn-success { background: #16A34A; color: #fff; }
+                .cad-btn-success:hover:not(:disabled) { background: #15803D; }
+                .cad-btn-secondary { background: #E2E8F0; color: #334155; }
+                .cad-btn-secondary:hover:not(:disabled) { background: #CBD5E1; }
 
                 .cad-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
-                .cad-stat { padding: 16px; border-radius: 10px; text-align: center; border: 1px solid #e2e8f0; background: #f8fafc; }
-                .cad-stat .num { font-size: 24px; font-weight: bold; display: block; line-height: 1.2; }
-                .cad-stat .lbl { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #64748b; margin-top: 4px; }
-                .cad-stat-total { background: #eff6ff; color: #1e40af; }
-                .cad-stat-aprobados { background: #dcfce7; color: #15803d; }
-                .cad-stat-reprobados { background: #fee2e2; color: #b91c1c; }
-                .cad-stat-recuperacion { background: #fef3c7; color: #b45309; }
-                .cad-stat-promedio { background: #dbeafe; color: #1d4ed8; }
-
+                
                 .cad-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
-                .cad-busqueda { padding: 8px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; min-width: 250px; }
-                .cad-busqueda:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,.1); }
-
+                
                 .cad-aviso { padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 14px; font-weight: 500; display: flex; justify-content: space-between; align-items: center; }
-                .cad-aviso.success { background: #dcfce7; color: #15803d; border-left: 4px solid #16a34a; }
-                .cad-aviso.error { background: #fee2e2; color: #b91c1c; border-left: 4px solid #dc2626; }
-                .cad-aviso.warning { background: #fef3c7; color: #b45309; border-left: 4px solid #e67e22; }
-                .cad-aviso button { background: none; border: none; font-size: 18px; cursor: pointer; color: inherit; opacity: .7; }
+                .cad-aviso.success { background: #F0FDF4; color: #15803D; border-left: 4px solid #16A34A; }
+                .cad-aviso.error { background: #FEF2F2; color: #B91C1C; border-left: 4px solid #DC2626; }
+                .cad-aviso.warning { background: #FFFBEB; color: #B45309; border-left: 4px solid var(--ina-gold, #C8A832); }
+                .cad-aviso button { background: none; border: none; font-size: 18px; cursor: pointer; color: inherit; opacity: 0.7; }
                 .cad-aviso button:hover { opacity: 1; }
 
-                .cad-info-box { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #1e40af; }
+                .cad-info-box { 
+                    background: #EEF1F9; 
+                    border-left: 4px solid var(--ina-blue, #2B47B8); 
+                    padding: 12px 16px; 
+                    border-radius: 8px; 
+                    margin-bottom: 16px; 
+                    font-size: 13px; 
+                    color: var(--ina-deep, #1A2E6B); 
+                }
 
-                .cad-empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+                .cad-empty { text-align: center; padding: 40px; color: #94A3B8; font-size: 14px; }
                 .cad-empty h3 { color: #475569; margin: 0 0 8px; }
 
-                /* Tabla */
-                .cad-tabla-wrapper { overflow-x: auto; border-radius: 8px; border: 1px solid #e2e8f0; background: #fff; }
+                /* Tabla - Unificada con paleta-ina.css */
+                .cad-tabla-wrapper { overflow-x: auto; border-radius: 8px; border: 1px solid #E2E8F0; background: #FFFFFF; }
                 .cad-tabla { width: 100%; border-collapse: collapse; font-size: 13px; }
-                .cad-tabla thead th {
-                    background: #1e3a5f; color: #fff; padding: 12px 10px;
-                    text-align: center; font-size: 11px; text-transform: uppercase;
-                    letter-spacing: .5px; font-weight: 600; position: sticky; top: 0;
-                    z-index: 5;
-                }
-                .cad-tabla thead th:first-child { text-align: left; border-top-left-radius: 8px; }
-                .cad-tabla thead th:nth-child(2) { text-align: left; }
-                .cad-tabla thead th:last-child { border-top-right-radius: 8px; }
-                .cad-tabla tbody tr { border-bottom: 1px solid #e2e8f0; transition: background .15s; }
-                .cad-tabla tbody tr:hover { background: #f8fafc; }
-                .cad-tabla tbody tr:nth-child(even) { background: #fafbfc; }
-                .cad-tabla tbody tr:nth-child(even):hover { background: #f1f5f9; }
-                .cad-tabla td { padding: 10px 8px; text-align: center; color: #334155; vertical-align: middle; }
-
-                /* Código */
+                
                 .cad-tabla td.col-codigo {
                     text-align: left; font-family: monospace; font-size: 12px;
-                    color: #64748b;
+                    color: #64748B;
                 }
 
-                /* Columna de nombres: fondo blanco forzado, nombre completo */
                 .cad-tabla td.col-nombres {
                     text-align: left;
                     font-size: 13px;
@@ -388,102 +367,116 @@ const CuadroAuxiliarDireccion = () => {
                     min-width: 260px;
                     padding: 10px 12px;
                     vertical-align: middle;
-                    background-color: #ffffff !important;
-                    color: #1e293b;
+                    background-color: #FFFFFF !important;
+                    color: #1E293B;
                     font-weight: 500;
                 }
 
-                /* Forzar fondo blanco en hover y zebra */
-                .cad-tabla tbody tr:hover td.col-nombres {
-                    background-color: #ffffff !important;
-                }
-                .cad-tabla tbody tr:nth-child(even) td.col-nombres {
-                    background-color: #ffffff !important;
-                }
-                .cad-tabla tbody tr:nth-child(even):hover td.col-nombres {
-                    background-color: #ffffff !important;
-                }
-
-                /* Nombre completo en una sola línea (con wrap si es largo) */
                 .cad-tabla .nombre-completo {
-                    color: #1e293b;
+                    color: #1E293B;
                     font-size: 13px;
                     font-weight: 600;
                     white-space: normal;
                     word-break: break-word;
-                    background-color: #ffffff;
+                    background-color: #FFFFFF;
                 }
 
-                /* Celdas de notas */
                 .cad-tabla td.col-materia-cell {
                     font-weight: 600;
                     font-size: 14px;
-                    color: #1e293b;
+                    color: #1E293B;
                     letter-spacing: 0.3px;
                 }
                 .cad-tabla td.col-materia-cell.en-recuperacion {
-                    background: #fef3c7;
-                    color: #b45309;
+                    background: #FFFBEB;
+                    color: #B45309;
                 }
                 .cad-tabla td.col-materia-cell.sin-nota {
-                    color: #cbd5e1;
+                    color: #CBD5E1;
                     font-weight: 400;
                 }
                 .cad-tabla td.col-promedio-general {
                     font-weight: bold;
-                    color: #1e3a5f;
-                    background: #eff6ff;
+                    color: var(--ina-deep, #1A2E6B);
+                    background: #EEF1F9;
                     font-size: 14px;
                 }
 
                 .cad-tabla .nota-principal {
                     font-weight: 700;
                     font-size: 14px;
-                    color: #1e3a5f;
+                    color: var(--ina-deep, #1A2E6B);
                 }
                 .cad-tabla .recuperacion {
                     font-size: 11px;
-                    color: #3b82f6;
+                    color: var(--ina-blue, #2B47B8);
                     margin-top: 2px;
                 }
                 .cad-tabla .equivalente {
                     font-size: 10px;
-                    color: #64748b;
+                    color: #64748B;
                     margin-top: 2px;
                     text-transform: uppercase;
                 }
-                .cad-tabla .badge-recuperacion {
-                    display: inline-block; font-size: 9px; font-weight: bold;
-                    background: #e67e22; color: #fff; padding: 2px 6px;
-                    border-radius: 4px; margin-top: 4px; text-transform: uppercase;
-                }
-
-                /* Modal */
+                
+                /* Modal - Unificado con paleta-ina.css */
                 .cad-modal-overlay {
                     position: fixed; top:0; left:0; width:100%; height:100%;
-                    background: rgba(15,23,42,.55);
+                    background: rgba(26, 46, 107, 0.6);
+                    backdrop-filter: blur(4px);
                     display: flex; align-items: center; justify-content: center;
                     z-index: 999; padding: 20px;
                 }
                 .cad-modal {
-                    background: #fff; border-radius: 12px;
-                    max-width: 560px; width: 100%; padding: 24px;
+                    background: var(--ina-bg, #EEF1F9); 
+                    border-radius: 16px;
+                    max-width: 560px; width: 100%; padding: 0;
                     max-height: 90vh; overflow-y: auto;
+                    box-shadow: 0 20px 40px rgba(26, 46, 107, 0.2);
+                    border: 1px solid #D5DBEF;
                 }
-                .cad-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-                .cad-modal-header h3 { margin: 0; font-size: 17px; color: #1e3a5f; }
-                .cad-modal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #64748b; line-height: 1; }
-                .cad-modal-close:hover { color: #dc2626; }
+                .cad-modal-header { 
+                    display: flex; justify-content: space-between; align-items: center; 
+                    padding: 16px 24px;
+                    background: var(--ina-deep, #1A2E6B);
+                    border-radius: 16px 16px 0 0;
+                    border-bottom: 2px solid var(--ina-blue, #2B47B8);
+                }
+                .cad-modal-header h3 { margin: 0; font-size: 1.1rem; color: #FFFFFF; font-weight: 600; }
+                .cad-modal-close { 
+                    background: #EEF1F9; 
+                    border: 2px solid var(--ina-blue, #2B47B8);
+                    width: 34px; height: 34px;
+                    border-radius: 50%;
+                    font-size: 1.15rem;
+                    font-weight: 700;
+                    cursor: pointer; 
+                    color: var(--ina-deep, #1A2E6B); 
+                    display: flex; align-items: center; justify-content: center;
+                    transition: all 0.2s ease;
+                }
+                .cad-modal-close:hover { 
+                    background: var(--ina-gold, #C8A832); 
+                    color: var(--ina-deep, #1A2E6B);
+                    border-color: var(--ina-gold, #C8A832);
+                    transform: scale(1.1);
+                }
+
+                .cad-modal-body { padding: 24px; }
 
                 .cad-export-btn {
                     display: block; width: 100%; padding: 14px 16px; margin-bottom: 10px;
-                    background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;
-                    text-align: left; cursor: pointer; transition: all .2s;
+                    background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px;
+                    text-align: left; cursor: pointer; transition: all 0.2s;
                     font-size: 14px; color: #334155; font-family: inherit;
                 }
-                .cad-export-btn:hover { background: #eff6ff; border-color: #3b82f6; color: #1e40af; }
-                .cad-export-btn strong { display: block; color: #1e3a5f; margin-bottom: 2px; }
-                .cad-export-btn small { color: #64748b; font-size: 12px; }
+                .cad-export-btn:hover { 
+                    background: #EEF1F9; 
+                    border-color: var(--ina-blue, #2B47B8); 
+                    color: var(--ina-deep, #1A2E6B); 
+                }
+                .cad-export-btn strong { display: block; color: var(--ina-deep, #1A2E6B); margin-bottom: 2px; }
+                .cad-export-btn small { color: #64748B; font-size: 12px; }
 
                 @media (max-width: 768px) {
                     .cad-filtros { grid-template-columns: 1fr; }

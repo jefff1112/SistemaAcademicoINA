@@ -12,6 +12,7 @@ const NuevoIngreso = () => {
         genero: '',
         telefono: '',
         correo: '',
+        emailEncargado: '',
         escuelaProcedencia: '',
         nivelAspira: 'Bachillerato General',
         especialidadAspira: ''
@@ -294,12 +295,23 @@ const NuevoIngreso = () => {
             return;
         }
 
-        // ✅ VERIFICAR DUPLICADOS
-        const duplicadoNie = await verificarCampo('nie', nieVal);
-        const duplicadoDui = formData.dui ? await verificarCampo('dui', formData.dui) : false;
-        const duplicadoCorreo = formData.correo ? await verificarCampo('correo', formData.correo) : false;
+        // ✅ VERIFICAR DUPLICADOS (con try/catch para ver errores)
+        console.log('🔍 Verificando duplicados...');
+        let duplicadoNie = false, duplicadoDui = false, duplicadoCorreo = false, duplicadoEmailEncargado = false;
+        try {
+            duplicadoNie = await verificarCampo('nie', nieVal);
+            duplicadoDui = formData.dui ? await verificarCampo('dui', formData.dui) : false;
+            duplicadoCorreo = formData.correo ? await verificarCampo('correo', formData.correo) : false;
+            duplicadoEmailEncargado = formData.emailEncargado ? await verificarCampo('emailEncargado', formData.emailEncargado) : false;
+            console.log('🔍 Resultado duplicados:', { duplicadoNie, duplicadoDui, duplicadoCorreo, duplicadoEmailEncargado });
+        } catch (err) {
+            console.error('❌ Error en verificación de duplicados:', err);
+            setError('Error al verificar datos duplicados: ' + (err.message || err));
+            setLoading(false);
+            return;
+        }
 
-        if (duplicadoNie || duplicadoDui || duplicadoCorreo) {
+        if (duplicadoNie || duplicadoDui || duplicadoCorreo || duplicadoEmailEncargado) {
             setLoading(false);
             return;
         }
@@ -362,6 +374,7 @@ const NuevoIngreso = () => {
             data.append('genero', formData.genero || '');
             data.append('telefono', formData.telefono || '');
             data.append('correo', formData.correo);
+            data.append('emailEncargado', formData.emailEncargado);
             data.append('escuelaProcedencia', formData.escuelaProcedencia || '');
             data.append('nivelAspira', formData.nivelAspira);
             data.append('especialidadAspira', formData.especialidadAspira || '');
@@ -389,7 +402,7 @@ const NuevoIngreso = () => {
 
             setFormData({
                 nombres: '', apellidos: '', dui: '', carnetMenoridad: '', nie: '', fechaNacimiento: '',
-                genero: '', telefono: '', correo: '', escuelaProcedencia: '',
+                genero: '', telefono: '', correo: '', emailEncargado: '', escuelaProcedencia: '',
                 nivelAspira: 'Bachillerato General', especialidadAspira: ''
             });
             setFoto(null);
@@ -491,6 +504,10 @@ const NuevoIngreso = () => {
                         <div className="form-field">
                             <label>Correo Electrónico *</label>
                             <input type="email" name="correo" value={formData.correo} onChange={handleChange} required />
+                        </div>
+                        <div className="form-field">
+                            <label>Correo del Encargado *</label>
+                            <input type="email" name="emailEncargado" value={formData.emailEncargado} onChange={handleChange} placeholder="correo@encargado.com" />
                         </div>
                         <div className="form-field full-width">
                             <label>Escuela de Procedencia</label>

@@ -10,7 +10,7 @@ using SistemaAcademicoINA.Services;
 
 namespace SistemaAcademicoINA.Controllers;
 
-// Controlador API: gestión de estudiantes con activación de cuenta pendiente.
+// Controlador API: gestión de activaciones pendientes (Estudiantes + Encargados).
 // Solo Director y Registro Academico pueden listar y gestionar las activaciones.
 [ApiController]
 [Route("api/activaciones")]
@@ -32,14 +32,20 @@ public class ActivacionesController : ControllerBase
     }
 
     // ============================================================
-    // GET: lista de estudiantes con activación pendiente y estado de su token.
+    // GET: lista de activaciones pendientes (Estudiantes y/o Encargados).
+    // Query param: tipo = "estudiante" | "encargado" | "todos" (default: todos)
     // ============================================================
     [HttpGet("pendientes")]
     [Authorize(Roles = "Director,Registro Academico")]
-    public async Task<IActionResult> ListarPendientes()
+    public async Task<IActionResult> ListarPendientes([FromQuery] string tipo = "todos")
     {
+        var rolIds = new List<int>();
+        if (tipo == "estudiante") rolIds.Add(7);
+        else if (tipo == "encargado") rolIds.Add(8);
+        else { rolIds.Add(7); rolIds.Add(8); } // todos
+
         var usuarios = await _context.Usuarios
-            .Where(u => u.Estado == false && u.RolId == 7)
+            .Where(u => u.Estado == false && rolIds.Contains(u.RolId))
             .OrderByDescending(u => u.IdUsuario)
             .ToListAsync();
 
@@ -51,11 +57,15 @@ public class ActivacionesController : ControllerBase
             .OrderByDescending(t => t.FechaCreacion)
             .ToListAsync();
 
+        // Para estudiantes: buscar por CodigoEstudiante
+        // Para encargados: buscar por EmailEncargado (el correo del usuario encargado)
         var estudiantes = await _context.Estudiantes
-            .Where(e => codigos.Contains(e.CodigoEstudiante))
+            .Where(e => codigos.Contains(e.CodigoEstudiante) || codigos.Contains(e.EmailEncargado ?? ""))
             .ToListAsync();
 
         var estudiantePorCodigo = estudiantes.ToDictionary(e => e.CodigoEstudiante);
+        var estudiantePorEmailEncargado = estudiantes.Where(e => !string.IsNullOrEmpty(e.EmailEncargado))
+            .ToDictionary(e => e.EmailEncargado!);
 
         var resultado = usuarios.Select(u =>
         {
@@ -68,7 +78,19 @@ public class ActivacionesController : ControllerBase
                         ? "Expirado"
                         : "Válido";
 
-            var est = estudiantePorCodigo.GetValueOrDefault(u.Codigo);
+            var esEncargado = u.RolId == 8;
+            Estudiante? est = null;
+
+            if (esEncargado)
+            {
+                // Para encargados, buscar por email_encargado
+                estudiantePorEmailEncargado.TryGetValue(u.Correo ?? "", out est);
+            }
+            else
+            {
+                // Para estudiantes, buscar por codigo_estudiante
+                estudiantePorCodigo.TryGetValue(u.Codigo, out est);
+            }
 
             return new
             {
@@ -79,7 +101,17 @@ public class ActivacionesController : ControllerBase
                 estadoActivacion = u.EstadoActivacion,
                 estadoToken,
                 tokenId = token?.Id,
-                fechaMatricula = est?.FechaMatricula
+                fechaMatricula = est?.FechaMatricula,
+                tipo = esEncargado ? "encargado" : "estudiante",
+                // Para encargados, incluir info del estudiante vinculado
+                estudianteVinculado = esEncargado && est != null ? new
+                {
+                    idEstudiante = est.IdEstudiante,
+                    nombres = est.Nombres,
+                    apellidos = est.Apellidos,
+                    codigoEstudiante = est.CodigoEstudiante,
+                    nie = est.Nie
+                } : null
             };
         }).ToList();
 
@@ -88,12 +120,15 @@ public class ActivacionesController : ControllerBase
 
     // ============================================================
     // POST: reenviar correo (invalida token anterior y genera uno nuevo).
+    // Funciona para Estudiante y Encargado (detecta por rol).
     // ============================================================
     [HttpPost("{usuarioId}/reenviar")]
     [Authorize(Roles = "Director,Registro Academico")]
     public async Task<IActionResult> Reenviar(int usuarioId)
     {
-        var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == usuarioId);
+        var usuario = await _context.Usuarios
+            .Include(u => u.Rol)
+            .FirstOrDefaultAsync(u => u.IdUsuario == usuarioId);
         if (usuario == null)
             return NotFound(new { mensaje = "Usuario no encontrado" });
 
@@ -119,26 +154,48 @@ public class ActivacionesController : ControllerBase
         usuario.EstadoActivacion = "PendienteActivacion";
         await _context.SaveChangesAsync();
 
+        var esEncargado = usuario.RolId == 8;
+        string asunto, html;
+
+        if (esEncargado)
+        {
+            // Buscar nombre del estudiante vinculado
+            var estudiante = await _context.Estudiantes
+                .FirstOrDefaultAsync(e => e.EmailEncargado == usuario.Correo);
+            var nombreEstudiante = estudiante != null ? $"{estudiante.Nombres} {estudiante.Apellidos}" : "su hijo(a)";
+
+            asunto = "¡Felicidades! Su hijo(a) ha sido matriculado en el INA";
+            html = await GenerarHtmlBienvenidaEncargado($"{usuario.Nombres} {usuario.Apellidos}", nombreEstudiante, token);
+        }
+        else
+        {
+            asunto = "¡Felicidades! Has sido aceptado en el INA";
+            html = await GenerarHtmlBienvenida($"{usuario.Nombres} {usuario.Apellidos}", token);
+        }
+
         await _emailService.EncolarAsync(new EmailMessage
         {
             Destinatario = usuario.Correo,
-            Asunto = "¡Felicidades! Has sido aceptado en el INA",
-            CuerpoHtml = await GenerarHtmlBienvenida($"{usuario.Nombres} {usuario.Apellidos}", token)
+            Asunto = asunto,
+            CuerpoHtml = html
         });
 
-        await AuditoriaAsync($"Correo de activación reenviado a {usuario.Correo}", "ReenviarActivacion");
+        await AuditoriaAsync($"Correo de activación reenviado a {usuario.Correo} ({usuario.Rol?.NombreRol ?? "Usuario"})", "ReenviarActivacion");
 
         return Ok(new { mensaje = "Correo reenviado correctamente" });
     }
 
     // ============================================================
     // POST: marcar en espera de activación (con comentario opcional).
+    // Funciona para Estudiante y Encargado.
     // ============================================================
     [HttpPost("{usuarioId}/marcar-espera")]
     [Authorize(Roles = "Director,Registro Academico")]
     public async Task<IActionResult> MarcarEspera(int usuarioId, [FromBody] MarcarEsperaRequest request)
     {
-        var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == usuarioId);
+        var usuario = await _context.Usuarios
+            .Include(u => u.Rol)
+            .FirstOrDefaultAsync(u => u.IdUsuario == usuarioId);
         if (usuario == null)
             return NotFound(new { mensaje = "Usuario no encontrado" });
 
@@ -146,19 +203,22 @@ public class ActivacionesController : ControllerBase
         usuario.Estado = false;
         await _context.SaveChangesAsync();
 
-        await AuditoriaAsync($"Estudiante marcado en espera de activación (comentario: {request.Comentario ?? "sin comentario"})", "MarcarEsperaActivacion");
+        await AuditoriaAsync($"{usuario.Rol?.NombreRol ?? "Usuario"} marcado en espera de activación (comentario: {request.Comentario ?? "sin comentario"})", "MarcarEsperaActivacion");
 
-        return Ok(new { mensaje = "Estudiante marcado en espera" });
+        return Ok(new { mensaje = $"{usuario.Rol?.NombreRol ?? "Usuario"} marcado en espera" });
     }
 
     // ============================================================
     // POST: activar presencialmente (crea contraseña temporal y activa la cuenta).
+    // Funciona para Estudiante y Encargado.
     // ============================================================
     [HttpPost("{usuarioId}/activar-presencial")]
     [Authorize(Roles = "Director,Registro Academico")]
     public async Task<IActionResult> ActivarPresencial(int usuarioId, [FromBody] ActivarPresencialRequest request)
     {
-        var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.IdUsuario == usuarioId);
+        var usuario = await _context.Usuarios
+            .Include(u => u.Rol)
+            .FirstOrDefaultAsync(u => u.IdUsuario == usuarioId);
         if (usuario == null)
             return NotFound(new { mensaje = "Usuario no encontrado" });
 
@@ -174,9 +234,9 @@ public class ActivacionesController : ControllerBase
         await _context.SaveChangesAsync();
 
         var quien = User.FindFirst(ClaimTypes.Name)?.Value ?? "Sistema";
-        await AuditoriaAsync($"Cuenta activada presencialmente por {quien}", "ActivacionPresencial");
+        await AuditoriaAsync($"Cuenta de {usuario.Rol?.NombreRol ?? "Usuario"} activada presencialmente por {quien}", "ActivacionPresencial");
 
-        return Ok(new { mensaje = "Cuenta activada presencialmente" });
+        return Ok(new { mensaje = $"Cuenta de {usuario.Rol?.NombreRol ?? "Usuario"} activada presencialmente" });
     }
 
     // ============================================================
@@ -187,12 +247,14 @@ public class ActivacionesController : ControllerBase
     {
         var registro = await _context.TokensActivacion
             .Include(t => t.Usuario)
+                .ThenInclude(u => u.Rol)
             .FirstOrDefaultAsync(t => t.Token == request.Token);
 
         if (registro == null || registro.Usuario == null)
             return BadRequest(new { mensaje = "Enlace inválido" });
 
-        var detalle = $"El estudiante {registro.Usuario.Nombres} {registro.Usuario.Apellidos} ({registro.Usuario.Correo}) solicita un nuevo enlace de activación.";
+        var rol = registro.Usuario.Rol?.NombreRol ?? "Usuario";
+        var detalle = $"El {rol.ToLower()} {registro.Usuario.Nombres} {registro.Usuario.Apellidos} ({registro.Usuario.Correo}) solicita un nuevo enlace de activación.";
         await NotificarRolesAsync(detalle);
 
         return Ok(new { mensaje = "Solicitud enviada. Registro Académico será notificado." });
@@ -276,6 +338,18 @@ public class ActivacionesController : ControllerBase
         var enlace = ObtenerUrlActivacion(token);
         return await _plantillasCorreo.RenderizarAsync("nuevo_enlace_activacion", new Dictionary<string, string>
         {
+            { "nombreEstudiante", nombreEstudiante },
+            { "enlace", enlace }
+        });
+    }
+
+    // Genera el HTML del correo de bienvenida/activación para ENCARGADO.
+    private async Task<string> GenerarHtmlBienvenidaEncargado(string nombreEncargado, string nombreEstudiante, string token)
+    {
+        var enlace = ObtenerUrlActivacion(token);
+        return await _plantillasCorreo.RenderizarAsync("bienvenida_activacion_encargado", new Dictionary<string, string>
+        {
+            { "nombreEncargado", nombreEncargado },
             { "nombreEstudiante", nombreEstudiante },
             { "enlace", enlace }
         });

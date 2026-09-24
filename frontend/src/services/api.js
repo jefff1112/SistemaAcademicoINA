@@ -17,6 +17,16 @@ API.interceptors.request.use(
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
+        // Log de la URL completa con parámetros
+        if (config.params) {
+            const url = new URL(config.url, config.baseURL);
+            Object.entries(config.params).forEach(([key, value]) => {
+                url.searchParams.append(key, value);
+            });
+            console.log('📤 API Request:', config.method?.toUpperCase(), url.toString());
+        } else {
+            console.log('📤 API Request:', config.method?.toUpperCase(), config.baseURL + config.url);
+        }
         return config;
     },
     (error) => {

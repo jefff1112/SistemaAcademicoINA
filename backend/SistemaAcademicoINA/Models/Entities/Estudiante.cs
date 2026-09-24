@@ -117,6 +117,9 @@ public class Estudiante
     [Column("parentesco_encargado")]
     public string? ParentescoEncargado { get; set; }
 
+    [Column("email_encargado")]
+    public string? EmailEncargado { get; set; }
+
     [Column("contrasena")]
     public string? Contraseña { get; set; }
 

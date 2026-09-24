@@ -13,6 +13,7 @@ const PreinscripcionForm = () => {
         genero: '',
         telefono: '',
         correo: '',
+        emailEncargado: '',
         escuelaProcedencia: '',
         promedioAnterior: '',
         nivelAspira: 'Bachillerato General',
@@ -39,7 +40,7 @@ const PreinscripcionForm = () => {
             setSuccess(true);
             setFormData({
                 nombres: '', apellidos: '', dui: '', nie: '', fechaNacimiento: '',
-                genero: '', telefono: '', correo: '', escuelaProcedencia: '',
+                genero: '', telefono: '', correo: '', emailEncargado: '', escuelaProcedencia: '',
                 promedioAnterior: '', nivelAspira: 'Bachillerato General', especialidadAspira: ''
             });
         } catch (err) {
@@ -92,6 +93,10 @@ const PreinscripcionForm = () => {
                     <div>
                         <label className="block text-gray-700 text-sm font-bold mb-2">Correo *</label>
                         <input type="email" name="correo" value={formData.correo} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                    </div>
+                    <div>
+                        <label className="block text-gray-700 text-sm font-bold mb-2">Correo del Encargado *</label>
+                        <input type="email" name="emailEncargado" value={formData.emailEncargado} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="correo@encargado.com" />
                     </div>
                     <div className="md:col-span-2">
                         <label className="block text-gray-700 text-sm font-bold mb-2">Escuela de Procedencia</label>

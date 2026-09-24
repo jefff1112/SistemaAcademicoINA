@@ -141,3 +141,203 @@ a { color: #2B47B8 !important; }
 .card-section.destacado h2 { color: #FFFFFF !important; }
 .spinner { border-top-color: #2B47B8 !important; }
 .stat-icon { background: #E3E8F7 !important; color: #1A2E6B !important; }
+
+/* ==========================================================================
+   13) UNIFICACIÓN GLOBAL DE TABLAS (Override de index.css)
+   ========================================================================== */
+table.data-table,
+table.cad-tabla,
+table.tabla-cuadro,
+table.tabla-notas,
+table.estudiantes-table,
+table.aspirantes-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    background: #FFFFFF !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+}
+
+table.data-table th,
+table.cad-tabla th,
+table.tabla-cuadro th,
+table.tabla-notas th,
+table.estudiantes-table th,
+table.aspirantes-table th {
+    background: #1A2E6B !important;
+    color: #FFFFFF !important;
+    padding: 12px 16px !important;
+    text-align: left !important;
+    font-weight: 600 !important;
+    font-size: 0.85rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    border: none !important;
+}
+
+table.data-table td,
+table.cad-tabla td,
+table.tabla-cuadro td,
+table.tabla-notas td,
+table.estudiantes-table td,
+table.aspirantes-table td {
+    padding: 10px 16px !important;
+    border-bottom: 1px solid #E2E8F0 !important;
+    color: #334155 !important;
+    font-size: 0.9rem !important;
+}
+
+table.data-table tbody tr:hover,
+table.cad-tabla tbody tr:hover,
+table.tabla-cuadro tbody tr:hover,
+table.tabla-notas tbody tr:hover,
+table.estudiantes-table tbody tr:hover,
+table.aspirantes-table tbody tr:hover {
+    background: #E3E8F7 !important;
+    transition: background 0.2s ease !important;
+}
+
+/* ==========================================================================
+   14) UNIFICACIÓN GLOBAL DE INPUTS Y SELECTS
+   ========================================================================== */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+select,
+textarea {
+    padding: 10px 14px !important;
+    border: 1px solid #CBD5E1 !important;
+    border-radius: 8px !important;
+    font-size: 0.9rem !important;
+    font-family: inherit !important;
+    transition: all 0.2s ease !important;
+    background: #FFFFFF !important;
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+select:focus,
+textarea:focus {
+    outline: none !important;
+    border-color: #2B47B8 !important;
+    box-shadow: 0 0 0 3px rgba(43, 71, 184, 0.15) !important;
+}
+
+/* ==========================================================================
+   15) UNIFICACIÓN GLOBAL DE MODALES
+   ========================================================================== */
+.modal-overlay,
+.cuadro-modal-overlay,
+.cad-modal-overlay {
+    background: rgba(26, 46, 107, 0.6) !important;
+    backdrop-filter: blur(4px) !important;
+}
+
+.modal-container,
+.cuadro-modal,
+.cad-modal {
+    background: #EEF1F9 !important;
+    border-radius: 16px !important;
+    box-shadow: 0 20px 40px rgba(26, 46, 107, 0.2) !important;
+    border: 1px solid #D5DBEF !important;
+}
+
+.modal-header,
+.cuadro-modal-header,
+.cad-modal-header {
+    background: #1A2E6B !important;
+    border-radius: 16px 16px 0 0 !important;
+    padding: 16px 24px !important;
+    border-bottom: 2px solid #2B47B8 !important;
+}
+
+.modal-header h3,
+.cuadro-modal-header h3,
+.cad-modal-header h3 {
+    color: #FFFFFF !important;
+    margin: 0 !important;
+    font-size: 1.1rem !important;
+}
+
+/* ==========================================================================
+   16) TARJETAS DE ESTADÍSTICAS (Dashboard)
+   ========================================================================== */
+.stat-card,
+.cad-stat {
+    border-radius: 12px !important;
+    padding: 20px !important;
+    text-align: center !important;
+    border: 1px solid #D5DBEF !important;
+    transition: transform 0.2s ease, box-shadow 0.2s ease !important;
+}
+
+.stat-card:hover,
+.cad-stat:hover {
+    transform: translateY(-4px) !important;
+    box-shadow: 0 8px 20px rgba(26, 46, 107, 0.12) !important;
+}
+
+.stat-card .stat-value,
+.stat-card .stat-number,
+.cad-stat .num {
+    font-size: 1.8rem !important;
+    font-weight: 700 !important;
+    color: #1A2E6B !important;
+    line-height: 1.2 !important;
+}
+
+.stat-card .stat-label,
+.cad-stat .lbl {
+    font-size: 0.8rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.5px !important;
+    color: #64748B !important;
+    margin-top: 8px !important;
+    display: block !important;
+}
+
+/* Variantes de estadísticas */
+.cad-stat-total { background: #EEF1F9 !important; border-color: #2B47B8 !important; }
+.cad-stat-total .num { color: #2B47B8 !important; }
+
+.cad-stat-aprobados { background: #F0FDF4 !important; border-color: #16A34A !important; }
+.cad-stat-aprobados .num { color: #16A34A !important; }
+
+.cad-stat-reprobados { background: #FEF2F2 !important; border-color: #DC2626 !important; }
+.cad-stat-reprobados .num { color: #DC2626 !important; }
+
+.cad-stat-recuperacion { background: #FFFBEB !important; border-color: #C8A832 !important; }
+.cad-stat-recuperacion .num { color: #C8A832 !important; }
+
+/* ==========================================================================
+   17) BADGES Y ETIQUETAS
+   ========================================================================== */
+.badge-recuperacion,
+.estado-recuperacion {
+    background: #C8A832 !important;
+    color: #1A2E6B !important;
+    font-weight: 700 !important;
+    padding: 4px 10px !important;
+    border-radius: 20px !important;
+    font-size: 0.7rem !important;
+    text-transform: uppercase !important;
+    display: inline-block !important;
+    margin-top: 4px !important;
+}
+
+.badge-success,
+.estado-aprobado {
+    background: #F0FDF4 !important;
+    color: #16A34A !important;
+    border: 1px solid #BBF7D0 !important;
+}
+
+.badge-danger,
+.estado-reprobado {
+    background: #FEF2F2 !important;
+    color: #DC2626 !important;
+    border: 1px solid #FECACA !important;
+}

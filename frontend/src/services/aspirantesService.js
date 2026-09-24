@@ -38,10 +38,24 @@ export const createAspirante = async (data) => {
                 headers
             });
 
-            const resJson = await resp.json().catch(() => null);
+            const resJson = await resp.json().catch(() => ({}));
 
             if (!resp.ok) {
-                const error = new Error(resJson?.mensaje || 'Error en creación de aspirante');
+                // Log detallado para debugging
+                console.error('❌ Backend error response:', {
+                    status: resp.status,
+                    statusText: resp.statusText,
+                    data: resJson
+                });
+                
+                const mensaje = resJson?.mensaje 
+                    || resJson?.message 
+                    || resJson?.error 
+                    || resJson?.title 
+                    || JSON.stringify(resJson)
+                    || `Error HTTP ${resp.status}: ${resp.statusText}`;
+                
+                const error = new Error(mensaje);
                 error.response = { data: resJson, status: resp.status };
                 throw error;
             }
@@ -168,12 +182,16 @@ export const deleteCupo = async (id) => {
 
 export const verificarAspirante = async (campo, valor) => {
     try {
-        const response = await API.get('/aspirantes/verificar', {
-            params: { [campo]: valor.trim() }
-        });
+        const params = {};
+        params[campo] = valor.trim();
+        console.log('🔍 verificarAspirante params:', params);
+        
+        const response = await API.get('/aspirantes/verificar', { params });
+        console.log('✅ verificarAspirante response:', response.data);
         return response.data;
     } catch (error) {
-        console.error('Error al verificar:', error);
+        console.error('❌ Error al verificar:', error);
+        console.error('❌ Error config:', error.config);
         throw error;
     }
 };

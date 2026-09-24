@@ -12,6 +12,7 @@ const PreinscripcionForm = () => {
         genero: '',
         telefono: '',
         correo: '',
+        emailEncargado: '',
         escuelaProcedencia: '',
         promedioAnterior: '',
         nivelAspira: 'Bachillerato General',
@@ -21,7 +22,7 @@ const PreinscripcionForm = () => {
     const [success, setSuccess] = useState(false);
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
-    const [erroresCampo, setErroresCampo] = useState({ dui: '', nie: '', correo: '' });
+    const [erroresCampo, setErroresCampo] = useState({ dui: '', nie: '', correo: '', emailEncargado: '' });
     const [intentosHoy, setIntentosHoy] = useState(null);
     const MAX_INTENTOS_POR_DIA = 3;
     const EDAD_MINIMA = 14;
@@ -196,13 +197,14 @@ const PreinscripcionForm = () => {
             return;
         }
 
-        const [dupDui, dupNie, dupCorreo] = await Promise.all([
+        const [dupDui, dupNie, dupCorreo, dupEmailEncargado] = await Promise.all([
             formData.dui ? verificarCampo('dui', formData.dui) : Promise.resolve(null),
             verificarCampo('nie', nieVal),
-            formData.correo ? verificarCampo('correo', formData.correo) : Promise.resolve(null)
+            formData.correo ? verificarCampo('correo', formData.correo) : Promise.resolve(null),
+            formData.emailEncargado ? verificarCampo('emailEncargado', formData.emailEncargado) : Promise.resolve(null)
         ]);
 
-        const duplicado = dupDui || dupNie || dupCorreo;
+        const duplicado = dupDui || dupNie || dupCorreo || dupEmailEncargado;
         if (duplicado) {
             setError(duplicado.mensaje);
             setLoading(false);
@@ -224,10 +226,10 @@ const PreinscripcionForm = () => {
             setSuccess(true);
             setFormData({
                 nombres: '', apellidos: '', dui: '', nie: '', fechaNacimiento: '',
-                genero: '', telefono: '', correo: '', escuelaProcedencia: '',
+                genero: '', telefono: '', correo: '', emailEncargado: '', escuelaProcedencia: '',
                 promedioAnterior: '', nivelAspira: 'Bachillerato General', especialidadAspira: ''
             });
-            setErroresCampo({ dui: '', nie: '', correo: '' });
+            setErroresCampo({ dui: '', nie: '', correo: '', emailEncargado: '' });
             window.scrollTo(0, 0);
         } catch (err) {
             incrementAttemptsForToday(nieVal);
@@ -358,6 +360,20 @@ const PreinscripcionForm = () => {
                             className={`w-full px-3 py-2 border rounded-lg ${erroresCampo.correo ? 'border-red-500' : 'border-gray-300'}`}
                         />
                         {erroresCampo.correo && <p className="text-red-600 text-xs mt-1">{erroresCampo.correo}</p>}
+                    </div>
+                    <div>
+                        <label className="block text-gray-700 text-sm font-bold mb-2">Correo del Encargado *</label>
+                        <input
+                            type="email"
+                            name="emailEncargado"
+                            value={formData.emailEncargado}
+                            onChange={handleChange}
+                            onBlur={(e) => verificarCampo('emailEncargado', e.target.value)}
+                            required
+                            className={`w-full px-3 py-2 border rounded-lg ${erroresCampo.emailEncargado ? 'border-red-500' : 'border-gray-300'}`}
+                            placeholder="correo@encargado.com"
+                        />
+                        {erroresCampo.emailEncargado && <p className="text-red-600 text-xs mt-1">{erroresCampo.emailEncargado}</p>}
                     </div>
 
                     <div className="md:col-span-2">

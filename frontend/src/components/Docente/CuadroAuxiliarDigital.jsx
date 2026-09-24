@@ -19,6 +19,7 @@ const CuadroAuxiliarDigital = () => {
     const [mensaje, setMensaje] = useState(null);
     const [notasEditadas, setNotasEditadas] = useState({});
     const [mostrarModalExportacion, setMostrarModalExportacion] = useState(false);
+    const [busquedaEstudiante, setBusquedaEstudiante] = useState('');
 
     const [filtros, setFiltros] = useState({
         idClase: '',
@@ -328,6 +329,18 @@ const CuadroAuxiliarDigital = () => {
         return cuadroCompleto.filas.filter(f => estaEnRecuperacion(f.promedioFinal)).length;
     }, [cuadroCompleto]);
 
+    // Filtrado de estudiantes por búsqueda
+    const filasFiltradas = useMemo(() => {
+        if (!cuadroCompleto?.filas) return [];
+        if (!busquedaEstudiante.trim()) return cuadroCompleto.filas;
+        const term = busquedaEstudiante.toLowerCase();
+        return cuadroCompleto.filas.filter(f => 
+            (f.nombres && f.nombres.toLowerCase().includes(term)) ||
+            (f.apellidos && f.apellidos.toLowerCase().includes(term)) ||
+            (f.codigo && f.codigo.toLowerCase().includes(term))
+        );
+    }, [cuadroCompleto, busquedaEstudiante]);
+
     // ============================================================
     // RENDER
     // ============================================================
@@ -467,6 +480,18 @@ const CuadroAuxiliarDigital = () => {
                                 </select>
                             </div>
                         )}
+
+                        {cuadroCompleto && (
+                            <div className="cuadro-field">
+                                <label>Buscar Estudiante</label>
+                                <input
+                                    type="text"
+                                    placeholder="Nombre, apellido o código..."
+                                    value={busquedaEstudiante}
+                                    onChange={e => setBusquedaEstudiante(e.target.value)}
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -556,7 +581,7 @@ const CuadroAuxiliarDigital = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {cuadroCompleto.filas.map(fila => {
+                                        {filasFiltradas.map(fila => {
                                             const enRecuperacion = estaEnRecuperacion(fila.promedioFinal);
                                             const equivalente = cuadroCompleto.esModulo
                                                 ? equivalenteCualitativoModulo(fila.promedioFinal)
@@ -650,11 +675,11 @@ const CuadroAuxiliarDigital = () => {
                             </div>
 
                             <div className="resumen-cuadro">
-                                <div className="resumen-item"><strong>Total Estudiantes:</strong> {cuadroCompleto.filas?.length || 0}</div>
+                                <div className="resumen-item"><strong>Total Estudiantes:</strong> {filasFiltradas.length}</div>
                                 <div className="resumen-item"><strong>Total Actividades:</strong> {cuadroCompleto.header?.actividades?.length || 0}</div>
                                 <div className="resumen-item"><strong>Es Módulo:</strong> {cuadroCompleto.esModulo ? 'Sí' : 'No'}</div>
                                 <div className="resumen-item">
-                                    <strong>En Recuperación:</strong> {estudiantesEnRecuperacion} estudiante(s)
+                                    <strong>En Recuperación:</strong> {filasFiltradas.filter(f => estaEnRecuperacion(f.promedioFinal)).length} estudiante(s)
                                 </div>
                             </div>
 
