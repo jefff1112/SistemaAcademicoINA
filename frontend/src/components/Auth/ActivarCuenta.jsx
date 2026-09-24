@@ -1,13 +1,12 @@
-// Componente ActivarCuenta: página pública de activación de cuenta del estudiante.
-// Valida el token, muestra los datos de la preinscripción, permite crear contraseña
-// y reportar datos incorrectos (múltiples a la vez).
+// Componente ActivarCuenta: página pública de activación de cuenta (Estudiante o Encargado).
+// Valida el token, muestra los datos según el rol, permite crear contraseña y reportar datos incorrectos.
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { validarToken, activarCuenta, solicitarNuevoEnlace } from '../../services/authService';
 import { crearReportes } from '../../services/reportesService';
 
-// Campos reportables (clave en BD = campo enviado al backend).
-const CAMPOS_REPORTABLES = [
+// Campos reportables para estudiantes.
+const CAMPOS_REPORTABLES_ESTUDIANTE = [
     { campo: 'nombres', label: 'Nombres' },
     { campo: 'apellidos', label: 'Apellidos' },
     { campo: 'nie', label: 'NIE (código MINED)' },
@@ -192,29 +191,52 @@ const ActivarCuenta = () => {
         );
     }
 
-    // Estado válido: pantalla de bienvenida + formulario de contraseña + modal de reporte.
+    // Estado válido: detectar si es Estudiante o Encargado
+    const esEncargado = datos?.rol === 'Encargado';
     const est = datos?.estudiante;
+    const encargado = datos?.encargado;
 
     return (
         <div style={estiloCarta}>
             <h2 style={{ color: '#1A2E6B', textAlign: 'center' }}>Instituto Nacional de Apopa</h2>
-            <h3 style={{ textAlign: 'center' }}>¡Bienvenido, {est?.nombres}!</h3>
-            <p style={{ textAlign: 'center', color: '#64748b' }}>Revisa tus datos y crea tu contraseña para acceder al portal.</p>
-
-            <div style={{ background: '#EEF1F9', borderRadius: '8px', padding: '16px', margin: '16px 0', fontSize: '14px' }}>
-                <p><strong>Nombres:</strong> {est?.nombres}</p>
-                <p><strong>Apellidos:</strong> {est?.apellidos}</p>
-                <p><strong>DUI:</strong> {est?.dui || '-'}</p>
-                <p><strong>NIE:</strong> {est?.nie || '-'}</p>
-                <p><strong>Fecha de nacimiento:</strong> {est?.fechaNacimiento ? String(est.fechaNacimiento).slice(0, 10) : '-'}</p>
-                <p><strong>Género:</strong> {est?.genero || '-'}</p>
-                <p><strong>Dirección:</strong> {est?.direccion || '-'}</p>
-                <p><strong>Teléfono:</strong> {est?.telefonoMovil || '-'}</p>
-                <p><strong>Correo:</strong> {est?.correo || '-'}</p>
-                <p><strong>Carrera:</strong> {est?.carrera || 'Bachillerato General'}</p>
-                <p><strong>Nivel:</strong> {est?.nivel || '-'}</p>
-                {est?.gradoSeccion && <p><strong>Grado/Sección:</strong> {est.gradoSeccion}</p>}
-            </div>
+            {esEncargado ? (
+                <>
+                    <h3 style={{ textAlign: 'center' }}>¡Bienvenido, {encargado?.nombres}!</h3>
+                    <p style={{ textAlign: 'center', color: '#64748b' }}>
+                        Crea tu contraseña para acceder al <strong>Portal de Encargados</strong> y dar seguimiento a <strong>{est?.nombres} {est?.apellidos}</strong>.
+                    </p>
+                    <div style={{ background: '#EEF1F9', borderRadius: '8px', padding: '16px', margin: '16px 0', fontSize: '14px' }}>
+                        <p><strong>Encargado:</strong> {encargado?.nombres} {encargado?.apellidos}</p>
+                        <p><strong>Correo:</strong> {encargado?.correo || '-'}</p>
+                        <hr style={{ margin: '12px 0', borderColor: '#cbd5e1' }} />
+                        <p><strong>Estudiante a cargo:</strong> {est?.nombres} {est?.apellidos}</p>
+                        <p><strong>Código Estudiante:</strong> {est?.codigoEstudiante || '-'}</p>
+                        <p><strong>NIE:</strong> {est?.nie || '-'}</p>
+                        <p><strong>Carrera:</strong> {est?.carrera || 'Bachillerato General'}</p>
+                        <p><strong>Nivel:</strong> {est?.nivel || '-'}</p>
+                        {est?.gradoSeccion && <p><strong>Grado/Sección:</strong> {est.gradoSeccion}</p>}
+                    </div>
+                </>
+            ) : (
+                <>
+                    <h3 style={{ textAlign: 'center' }}>¡Bienvenido, {est?.nombres}!</h3>
+                    <p style={{ textAlign: 'center', color: '#64748b' }}>Revisa tus datos y crea tu contraseña para acceder al portal.</p>
+                    <div style={{ background: '#EEF1F9', borderRadius: '8px', padding: '16px', margin: '16px 0', fontSize: '14px' }}>
+                        <p><strong>Nombres:</strong> {est?.nombres}</p>
+                        <p><strong>Apellidos:</strong> {est?.apellidos}</p>
+                        <p><strong>DUI:</strong> {est?.dui || '-'}</p>
+                        <p><strong>NIE:</strong> {est?.nie || '-'}</p>
+                        <p><strong>Fecha de nacimiento:</strong> {est?.fechaNacimiento ? String(est.fechaNacimiento).slice(0, 10) : '-'}</p>
+                        <p><strong>Género:</strong> {est?.genero || '-'}</p>
+                        <p><strong>Dirección:</strong> {est?.direccion || '-'}</p>
+                        <p><strong>Teléfono:</strong> {est?.telefonoMovil || '-'}</p>
+                        <p><strong>Correo:</strong> {est?.correo || '-'}</p>
+                        <p><strong>Carrera:</strong> {est?.carrera || 'Bachillerato General'}</p>
+                        <p><strong>Nivel:</strong> {est?.nivel || '-'}</p>
+                        {est?.gradoSeccion && <p><strong>Grado/Sección:</strong> {est.gradoSeccion}</p>}
+                    </div>
+                </>
+            )}
 
             <form onSubmit={handleActivar}>
                 {mensaje && <p style={{ color: '#b91c1c', fontSize: '14px' }}>{mensaje}</p>}
@@ -227,15 +249,17 @@ const ActivarCuenta = () => {
                     <input type="password" value={confirmar} onChange={(e) => setConfirmar(e.target.value)} style={estiloEntrada} placeholder="Repite la contraseña" required />
                 </div>
                 <button type="submit" disabled={enviando} style={{ ...estiloBoton, width: '100%' }}>
-                    {enviando ? 'Activando...' : 'Crear mi contraseña y acceder'}
+                    {enviando ? 'Activando...' : esEncargado ? 'Crear mi contraseña y acceder al Portal Encargado' : 'Crear mi contraseña y acceder'}
                 </button>
             </form>
 
-            <button onClick={() => setShowReporte(true)} style={{ ...estiloBoton, width: '100%', background: '#C8A832' }}>
-                Reportar dato incorrecto
-            </button>
+            {!esEncargado && (
+                <button onClick={() => setShowReporte(true)} style={{ ...estiloBoton, width: '100%', background: '#C8A832' }}>
+                    Reportar dato incorrecto
+                </button>
+            )}
 
-            {showReporte && (
+            {showReporte && !esEncargado && (
                 <div style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999 }}>
                     <div style={{ background: '#fff', borderRadius: '12px', maxWidth: '640px', width: '100%', padding: '24px', maxHeight: '90vh', overflowY: 'auto' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -249,7 +273,7 @@ const ActivarCuenta = () => {
                                     <label style={{ display: 'block', fontWeight: '500', marginBottom: '4px' }}>Campo a reportar</label>
                                     <select value={r.campo} onChange={(e) => actualizarReporte(idx, 'campo', e.target.value)} style={estiloEntrada}>
                                         <option value="">Seleccione un campo</option>
-                                        {CAMPOS_REPORTABLES.map(c => <option key={c.campo} value={c.campo}>{c.label}</option>)}
+                                        {CAMPOS_REPORTABLES_ESTUDIANTE.map(c => <option key={c.campo} value={c.campo}>{c.label}</option>)}
                                     </select>
                                 </div>
                                 <div style={{ marginBottom: '8px' }}>

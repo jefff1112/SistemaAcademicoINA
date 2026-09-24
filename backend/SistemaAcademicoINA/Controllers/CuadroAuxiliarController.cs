@@ -1463,8 +1463,152 @@ public class CuadroAuxiliarController : ControllerBase
 
     private async Task LlenarHojaConsolidadoAnual(IXLWorksheet ws, string nivelNombre, List<Clase> clases, List<PeriodoAcademico> periodos, int anio)
     {
-        ws.Cell(1, 1).Value = $"CONSOLIDADO ANUAL - {nivelNombre} - {anio}";
-        ws.Cell(1, 1).Style.Font.Bold = true;
-        ws.Cell(1, 1).Style.Font.FontSize = 14;
+        int row = 1;
+
+        // Título
+        ws.Cell(row, 1).Value = "INSTITUTO NACIONAL DE APOPA";
+        ws.Range(row, 1, row, 10).Merge();
+        ws.Cell(row, 1).Style.Font.Bold = true;
+        ws.Cell(row, 1).Style.Font.FontSize = 14;
+        ws.Cell(row, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        row++;
+
+        ws.Cell(row, 1).Value = $"CONSOLIDADO ANUAL - {nivelNombre} - Año {anio}";
+        ws.Range(row, 1, row, 10).Merge();
+        ws.Cell(row, 1).Style.Font.Bold = true;
+        ws.Cell(row, 1).Style.Font.FontSize = 12;
+        ws.Cell(row, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+        row += 2;
+
+        // Iterar por cada clase del nivel
+        foreach (var clase in clases.OrderBy(c => c.Seccion))
+        {
+            ws.Cell(row, 1).Value = $"Clase: {clase.NombreClase} {clase.Seccion}";
+            ws.Cell(row, 1).Style.Font.Bold = true;
+            row++;
+
+            // Header de columnas
+            ws.Cell(row, 1).Value = "Código";
+            ws.Cell(row, 1).Style.Font.Bold = true;
+            ws.Cell(row, 1).Style.Fill.BackgroundColor = XLColor.LightGray;
+            ws.Cell(row, 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+            ws.Cell(row, 2).Value = "Estudiante";
+            ws.Cell(row, 2).Style.Font.Bold = true;
+            ws.Cell(row, 2).Style.Fill.BackgroundColor = XLColor.LightGray;
+            ws.Cell(row, 2).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+            int colPeriodo = 3;
+            foreach (var periodo in periodos)
+            {
+                ws.Cell(row, colPeriodo).Value = periodo.Nombre ?? $"P{periodo.NumeroPeriodo}";
+                ws.Cell(row, colPeriodo).Style.Font.Bold = true;
+                ws.Cell(row, colPeriodo).Style.Fill.BackgroundColor = XLColor.LightBlue;
+                ws.Cell(row, colPeriodo).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                ws.Cell(row, colPeriodo).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                colPeriodo++;
+            }
+            ws.Cell(row, colPeriodo).Value = "Promedio Anual";
+            ws.Cell(row, colPeriodo).Style.Font.Bold = true;
+            ws.Cell(row, colPeriodo).Style.Fill.BackgroundColor = XLColor.LightGreen;
+            ws.Cell(row, colPeriodo).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+            row++;
+
+            // Obtener estudiantes de la clase
+            var idsEstudiantes = await _context.Inscripciones
+                .Where(i => i.IdClase == clase.IdClase && i.EstadoInscripcion == "Confirmada")
+                .Select(i => i.IdEstudiante)
+                .ToListAsync();
+
+            if (!idsEstudiantes.Any())
+            {
+                ws.Cell(row, 1).Value = "(Sin estudiantes matriculados)";
+                ws.Cell(row, 1).Style.Font.Italic = true;
+                row += 2;
+                continue;
+            }
+
+            var estudiantes = await _context.Estudiantes
+                .Where(e => idsEstudiantes.Contains(e.IdEstudiante) && e.Estado)
+                .OrderBy(e => e.Apellidos)
+                .ThenBy(e => e.Nombres)
+                .ToListAsync();
+
+            // Obtener todos los resultados del año lectivo para estos estudiantes en esta clase
+            var resultados = await _context.ResultadosPeriodos
+                .Where(r => idsEstudiantes.Contains(r.IdEstudiante)
+                    && r.IdClase == clase.IdClase
+                    && r.AnioLectivo == anio)
+                .ToListAsync();
+
+            foreach (var est in estudiantes)
+            {
+                ws.Cell(row, 1).Value = est.CodigoEstudiante ?? "";
+                ws.Cell(row, 1).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+                ws.Cell(row, 2).Value = $"{est.Apellidos}, {est.Nombres}";
+                ws.Cell(row, 2).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+
+                colPeriodo = 3;
+                decimal sumaNotas = 0;
+                int countNotas = 0;
+
+                foreach (var periodo in periodos)
+                {
+                    var resultado = resultados.FirstOrDefault(r =>
+                        r.IdEstudiante == est.IdEstudiante
+                        && r.IdPeriodo == periodo.IdPeriodo);
+
+                    if (resultado != null)
+                    {
+                        var notaFinal = (resultado.NotaRecuperacion.HasValue && resultado.NotaRecuperacion > 0)
+                            ? resultado.NotaRecuperacion.Value
+                            : resultado.NotaAcumulada;
+
+                        ws.Cell(row, colPeriodo).Value = notaFinal;
+                        ws.Cell(row, colPeriodo).Style.NumberFormat.Format = "0.00";
+                        ws.Cell(row, colPeriodo).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                        ws.Cell(row, colPeriodo).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+
+                        if (notaFinal > 0)
+                        {
+                            sumaNotas += notaFinal;
+                            countNotas++;
+                            if (notaFinal < 6)
+                                ws.Cell(row, colPeriodo).Style.Fill.BackgroundColor = XLColor.LightCoral;
+                        }
+                    }
+                    else
+                    {
+                        ws.Cell(row, colPeriodo).Value = "";
+                        ws.Cell(row, colPeriodo).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    }
+                    colPeriodo++;
+                }
+
+                // Promedio Anual
+                if (countNotas > 0)
+                {
+                    var promedioAnual = Math.Round(sumaNotas / countNotas, 2);
+                    ws.Cell(row, colPeriodo).Value = promedioAnual;
+                    ws.Cell(row, colPeriodo).Style.Font.Bold = true;
+                    ws.Cell(row, colPeriodo).Style.NumberFormat.Format = "0.00";
+                    ws.Cell(row, colPeriodo).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                    ws.Cell(row, colPeriodo).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
+                    if (promedioAnual < 6)
+                        ws.Cell(row, colPeriodo).Style.Fill.BackgroundColor = XLColor.LightCoral;
+                }
+                else
+                {
+                    ws.Cell(row, colPeriodo).Value = "";
+                    ws.Cell(row, colPeriodo).Style.Border.OutsideBorder = XLBorderStyleValues.Thin;
+                }
+
+                row++;
+            }
+            row += 2;
+        }
+
+        ws.Columns().AdjustToContents();
     }
 }

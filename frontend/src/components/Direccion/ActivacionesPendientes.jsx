@@ -1,4 +1,4 @@
-// Componente ActivacionesPendientes - CON TABS ESTUDIANTES / ENCARGADOS
+// Componente ActivacionesPendientes - CON TABS ESTUDIANTES / ENCARGADOS (Dirección)
 // Panel de gestión de activaciones pendientes (Estudiantes y Encargados).
 import React, { useState, useEffect, useMemo } from 'react';
 import DashboardLayout from '../Layout/DashboardLayout';

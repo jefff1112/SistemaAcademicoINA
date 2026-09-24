@@ -696,9 +696,23 @@ const ActividadesDocente = () => {
 
                                         return (
                                             <React.Fragment key={act.idActividad}>
-                                                <tr style={{ background: dragOverActId === act.idActividad ? '#eff6ff' : '#ffffff' }}>
+                                                <tr
+                                                    draggable="true"
+                                                    onDragStart={(e) => handleDragStartAct(e, act.idActividad)}
+                                                    onDragOver={(e) => handleDragOverAct(e, act.idActividad)}
+                                                    onDragLeave={handleDragLeaveAct}
+                                                    onDrop={(e) => handleDropAct(e, act.idActividad)}
+                                                    onDragEnd={handleDragEndAct}
+                                                    style={{
+                                                        background: dragOverActId === act.idActividad ? '#eff6ff' : '#ffffff',
+                                                        opacity: draggedActId === act.idActividad ? 0.4 : 1,
+                                                        cursor: 'grab',
+                                                        transition: 'background 0.15s, opacity 0.15s',
+                                                        borderBottom: dragOverActId === act.idActividad ? '2px solid #3b82f6' : undefined
+                                                    }}
+                                                >
                                                     <td style={S.td}>
-                                                        <span style={{ cursor: 'grab', color: '#94a3b8', marginRight: '6px', fontWeight: 700 }}>::</span>
+                                                        <span style={{ cursor: 'grab', color: '#94a3b8', marginRight: '6px', fontWeight: 700, fontSize: '16px', letterSpacing: '2px' }}>::</span>
                                                         <strong>{act.numeroOrden || '-'}</strong>
                                                     </td>
                                                     <td style={{ ...S.td, fontWeight: 600 }}><strong>{act.nombreActividad}</strong></td>
@@ -734,9 +748,24 @@ const ActividadesDocente = () => {
                                                 {act.subActividades?.map(sub => {
                                                     const subTipoBadge = getTipoBadge(sub.tipoSubActividad);
                                                     return (
-                                                        <tr key={sub.idSubActividad} style={{ background: '#fafbfc' }}>
+                                                        <tr
+                                                            key={sub.idSubActividad}
+                                                            draggable="true"
+                                                            onDragStart={(e) => handleDragStartSub(e, sub.idSubActividad)}
+                                                            onDragOver={(e) => handleDragOverSub(e, sub.idSubActividad)}
+                                                            onDragLeave={handleDragLeaveSub}
+                                                            onDrop={(e) => handleDropSub(e, sub.idSubActividad, act.idActividad)}
+                                                            onDragEnd={handleDragEndSub}
+                                                            style={{
+                                                                background: dragOverSubId === sub.idSubActividad ? '#f0f9ff' : '#fafbfc',
+                                                                opacity: draggedSubId === sub.idSubActividad ? 0.4 : 1,
+                                                                cursor: 'grab',
+                                                                transition: 'background 0.15s, opacity 0.15s',
+                                                                borderBottom: dragOverSubId === sub.idSubActividad ? '2px solid #8b5cf6' : undefined
+                                                            }}
+                                                        >
                                                             <td style={{ ...S.td, background: '#fafbfc' }}>
-                                                                <span style={{ cursor: 'grab', color: '#cbd5e1' }}>::</span>
+                                                                <span style={{ cursor: 'grab', color: '#cbd5e1', fontSize: '14px', letterSpacing: '2px' }}>::</span>
                                                             </td>
                                                             <td style={{ ...S.td, paddingLeft: '30px', background: '#fafbfc' }}>{sub.nombreDisplay || sub.nombreSubActividad}</td>
                                                             <td style={{ ...S.td, background: '#fafbfc' }}>
@@ -806,8 +835,22 @@ const ActividadesDocente = () => {
                                         <input type="number" min="0" max="100" step="0.01" value={formActividad.ponderacion} onChange={e => setFormActividad({ ...formActividad, ponderacion: e.target.value })} style={S.input} />
                                     </div>
                                     <div>
-                                        <label style={S.label}>Tipo (automático)</label>
-                                        <input type="text" value={tipoSel === 'modulo' ? 'Módulo' : 'Actividad'} disabled style={{ ...S.input, background: '#f8fafc', color: '#64748b' }} />
+                                        <label style={S.label}>Tipo de Actividad</label>
+                                        <select
+                                            value={formActividad.tipoActividad}
+                                            onChange={e => setFormActividad({ ...formActividad, tipoActividad: e.target.value })}
+                                            style={S.input}
+                                        >
+                                            {tipoSel === 'modulo' ? (
+                                                <option value="Modulo">Módulo</option>
+                                            ) : (
+                                                <>
+                                                    <option value="Actividad">Actividad</option>
+                                                    <option value="Evaluacion">Evaluación</option>
+                                                    <option value="PruebaObjetiva">Prueba Objetiva</option>
+                                                </>
+                                            )}
+                                        </select>
                                     </div>
                                 </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px', marginBottom: '15px' }}>

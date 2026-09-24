@@ -30,7 +30,7 @@ public class BoletaDTO
     public string DocenteOrientador { get; set; } = "DOCENTE ORIENTADOR/A";
 }
 
-// DTO de respuesta: notas por materia dentro de la boleta (P1-P4, promedio, nota final, estado e inasistencias).
+// DTO de respuesta: notas por materia dentro de la boleta (P1-P4, ordinario, recuperación, nota final, estado e inasistencias).
 public class NotaBoletaDTO
 {
     public int IdMateria { get; set; }
@@ -40,10 +40,18 @@ public class NotaBoletaDTO
     public decimal P2 { get; set; }
     public decimal P3 { get; set; }
     public decimal P4 { get; set; }
+    // ORDINARIO = (P1+P2+P3+P4)/4 (periodos sin nota = 0).
     public decimal Promedio { get; set; }
+    // Nota de recuperación (para mostrar en su columna).
+    public decimal? Recuperacion { get; set; }
+    // NOTA FINAL = (E1+E2+E3+E4)/4, donde Ei = recuperación (tope 6.0) si existe, si no la nota del periodo.
     public decimal NotaFinal { get; set; }
     public string Estado { get; set; } = "Pendiente";
     public int Inasistencias { get; set; }
+    // true si la fila es un módulo integral (especialidad) y no una asignatura.
+    public bool EsModulo { get; set; }
+    // Código tipo "MOD.1" para los módulos.
+    public string? CodigoModulo { get; set; }
 }
 
 // DTO de respuesta: resumen de asistencias incluido en la boleta de calificaciones.

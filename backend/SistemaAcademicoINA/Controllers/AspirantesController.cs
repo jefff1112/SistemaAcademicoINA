@@ -137,11 +137,11 @@ public class AspirantesController : ControllerBase
     [AllowAnonymous]
     [HttpGet("verificar")]
     public async Task<IActionResult> VerificarDuplicadosPreinscripcion(
-        [FromQuery] string? dui, [FromQuery] string? nie, [FromQuery] string? correo)
+        [FromQuery] string? dui, [FromQuery] string? nie, [FromQuery] string? correo, [FromQuery] string? emailEncargado)
     {
         try
         {
-            var duplicado = await BuscarDuplicadoAsync(dui, nie, correo);
+            var duplicado = await BuscarDuplicadoAsync(dui, nie, correo, emailEncargado);
             if (duplicado != null)
                 return Ok(new
                 {
@@ -170,7 +170,7 @@ public class AspirantesController : ControllerBase
             // =============================================
             // VALIDACIÓN DE DUPLICADOS (preinscripción pública)
             // =============================================
-            var duplicado = await BuscarDuplicadoAsync(request.Dui, request.Nie, request.Correo);
+            var duplicado = await BuscarDuplicadoAsync(request.Dui, request.Nie, request.Correo, request.EmailEncargado);
             if (duplicado != null)
                 return Conflict(new { mensaje = duplicado.Value.Mensaje, campo = duplicado.Value.Campo, duplicado = true });
 
@@ -226,6 +226,7 @@ public class AspirantesController : ControllerBase
                 Genero = request.Genero,
                 Telefono = request.Telefono,
                 Correo = request.Correo,
+                EmailEncargado = request.EmailEncargado,
                 EscuelaProcedencia = request.EscuelaProcedencia,
                 PromedioAnterior = request.PromedioAnterior,
                 NivelAspira = request.NivelAspira,
@@ -647,6 +648,7 @@ public class AspirantesController : ControllerBase
                 NombreEncargado = aspirante.NombreEncargado,
                 TelefonoEncargado = aspirante.TelefonoEncargado,
                 ParentescoEncargado = aspirante.ParentescoEncargado,
+                EmailEncargado = aspirante.EmailEncargado,
                 TelefonoEmergencia = aspirante.TelefonoEmergencia,
                 NombreContactoEmergencia = aspirante.NombreContactoEmergencia,
                 ParentescoEmergencia = aspirante.ParentescoEmergencia
@@ -736,6 +738,89 @@ public class AspirantesController : ControllerBase
                         Asunto = "¡Felicidades! Has sido aceptado en el INA",
                         CuerpoHtml = await GenerarHtmlBienvenida($"{aspirante.Nombres} {aspirante.Apellidos}", tokenActivacion)
                     });
+                }
+            }
+
+            // ============================================================
+            // CREAR USUARIO ENCARGADO (si hay email de encargado)
+            // ============================================================
+            if (!string.IsNullOrEmpty(aspirante.EmailEncargado))
+            {
+                // Validar que el email del encargado no esté ya registrado
+                if (await _context.Usuarios.AnyAsync(u => u.Correo == aspirante.EmailEncargado))
+                {
+                    // Log warning pero no bloquear la matrícula
+                    Console.WriteLine($"ADVERTENCIA: Email de encargado {aspirante.EmailEncargado} ya registrado en el sistema. No se crea usuario de encargado.");
+                }
+                else
+                {
+                    var usuarioEncargado = new Usuario
+                    {
+                        Codigo = "ENC-" + Guid.NewGuid().ToString("N").Substring(0, 8).ToUpper(),
+                        Nombres = aspirante.NombreEncargado ?? "",
+                        Apellidos = aspirante.Apellidos ?? "",
+                        Correo = aspirante.EmailEncargado,
+                        Contrasena = null,
+                        RolId = 8,         // Encargado
+                        Estado = false,    // inactivo hasta activación
+                        EstadoActivacion = enviarCorreo ? "PendienteActivacion" : "PendienteEnvioManual"
+                    };
+
+                    _context.Usuarios.Add(usuarioEncargado);
+                    await _context.SaveChangesAsync();
+
+                    // ============================================================
+                    // CREAR PERSONA Y RELACIÓN FAMILIAR PARA EL ENCARGADO
+                    // ============================================================
+                    var personaEncargado = new Persona
+                    {
+                        TipoDocumento = "DUI",
+                        NumeroDocumento = aspirante.DuiEncargado ?? "",
+                        Nombres = aspirante.NombreEncargado ?? "",
+                        Apellidos = aspirante.Apellidos ?? "",
+                        TelefonoPrincipal = aspirante.TelefonoEncargado ?? "",
+                        Correo = aspirante.EmailEncargado,
+                        IdUsuario = usuarioEncargado.IdUsuario
+                    };
+                    _context.Personas.Add(personaEncargado);
+                    await _context.SaveChangesAsync();
+
+                    var relacionFamiliar = new RelacionFamiliar
+                    {
+                        IdEstudiante = estudiante.IdEstudiante,
+                        IdPersona = personaEncargado.IdPersona,
+                        Parentesco = aspirante.ParentescoEncargado ?? "Encargado",
+                        ViveConEstudiante = true,
+                        RecibeComunicados = true
+                    };
+                    _context.RelacionesFamiliares.Add(relacionFamiliar);
+                    await _context.SaveChangesAsync();
+
+                    if (enviarCorreo)
+                    {
+                        var tokenActivacionEncargado = _jwtHelper.GenerarTokenActivacion(usuarioEncargado.IdUsuario, aspirante.EmailEncargado);
+                        _context.TokensActivacion.Add(new TokenActivacion
+                        {
+                            UsuarioId = usuarioEncargado.IdUsuario,
+                            Token = tokenActivacionEncargado,
+                            FechaCreacion = DateTime.Now,
+                            FechaExpiracion = DateTime.Now.AddHours(48),
+                            Usado = false,
+                            CreatedAt = DateTime.Now
+                        });
+                        await _context.SaveChangesAsync();
+
+                        // Enviar email de activación al encargado usando template específico
+                        await _emailService.EncolarAsync(new EmailMessage
+                        {
+                            Destinatario = aspirante.EmailEncargado,
+                            Asunto = "¡Felicidades! Su hijo(a) ha sido matriculado en el INA",
+                            CuerpoHtml = await GenerarHtmlBienvenidaEncargado(
+                                $"{aspirante.NombreEncargado}",
+                                $"{aspirante.Nombres} {aspirante.Apellidos}",
+                                tokenActivacionEncargado)
+                        });
+                    }
                 }
             }
 
@@ -1101,7 +1186,7 @@ public class AspirantesController : ControllerBase
     // o en otra solicitud activa (todo estado menos Rechazado).
     // Devuelve datos del duplicado o null si no hay.
     // ============================================================
-    private async Task<(string Campo, string Tipo, string Nombre, string Mensaje)?> BuscarDuplicadoAsync(string? dui, string? nie, string? correo)
+    private async Task<(string Campo, string Tipo, string Nombre, string Mensaje)?> BuscarDuplicadoAsync(string? dui, string? nie, string? correo, string? emailEncargado)
     {
         if (!string.IsNullOrWhiteSpace(dui))
         {
@@ -1145,6 +1230,23 @@ public class AspirantesController : ControllerBase
                     $"El correo {correo} ya fue utilizado en otra preinscripción ({aspi.Nombres} {aspi.Apellidos}). Espere la respuesta de su solicitud.");
         }
 
+        // Validar EmailEncargado
+        if (!string.IsNullOrWhiteSpace(emailEncargado))
+        {
+            var emailEnc = emailEncargado.Trim();
+            
+            var estEnc = await _context.Estudiantes.FirstOrDefaultAsync(e => e.EmailEncargado == emailEnc);
+            if (estEnc != null)
+                return ("emailEncargado", "estudiante", $"{estEnc.Nombres} {estEnc.Apellidos}",
+                    $"Ya existe un estudiante con este correo de encargado ({emailEnc}). No se puede registrar la misma información dos veces.");
+
+            var aspiEnc = await _context.Aspirantes
+                .FirstOrDefaultAsync(a => a.EmailEncargado == emailEnc && a.EstadoSolicitud != "Rechazado");
+            if (aspiEnc != null)
+                return ("emailEncargado", "solicitud", $"{aspiEnc.Nombres} {aspiEnc.Apellidos}",
+                    $"El correo del encargado {emailEnc} ya fue utilizado en otra preinscripción ({aspiEnc.Nombres} {aspiEnc.Apellidos}). Espere la respuesta de su solicitud.");
+        }
+
         return null;
     }
 
@@ -1156,6 +1258,20 @@ public class AspirantesController : ControllerBase
 
         return await _plantillasCorreo.RenderizarAsync("bienvenida_activacion", new Dictionary<string, string>
         {
+            { "nombreEstudiante", nombreEstudiante },
+            { "enlace", enlace }
+        });
+    }
+
+    // Genera el HTML del correo de bienvenida/activación para ENCARGADO.
+    private async Task<string> GenerarHtmlBienvenidaEncargado(string nombreEncargado, string nombreEstudiante, string token)
+    {
+        var frontendUrl = _configuration["FrontendUrl"] ?? "http://localhost:3000";
+        var enlace = $"{frontendUrl}/activar-cuenta?token={token}";
+
+        return await _plantillasCorreo.RenderizarAsync("bienvenida_activacion_encargado", new Dictionary<string, string>
+        {
+            { "nombreEncargado", nombreEncargado },
             { "nombreEstudiante", nombreEstudiante },
             { "enlace", enlace }
         });
@@ -1222,6 +1338,7 @@ public class AspiranteRequestConArchivos
     public string? Genero { get; set; }
     public string? Telefono { get; set; }
     public string? Correo { get; set; }
+    public string? EmailEncargado { get; set; }
     public string? EscuelaProcedencia { get; set; }
     public decimal? PromedioAnterior { get; set; }
     public string? NivelAspira { get; set; }

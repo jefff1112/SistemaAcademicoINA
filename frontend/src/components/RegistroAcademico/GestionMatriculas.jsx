@@ -379,6 +379,11 @@ const GestionMatriculas = () => {
                                         El correo quedará pendiente y podrás enviarlo después desde "Activaciones Pendientes".
                                     </p>
                                 )}
+                                {enviarCorreo && selectedAspirante?.emailEncargado && (
+                                    <p style={{ color: '#1e40af', fontSize: '13px', marginTop: '6px' }}>
+                                        ✓ Se enviará también correo de activación al Encargado: {selectedAspirante.emailEncargado}
+                                    </p>
+                                )}
                             </div>
                             <div className="modal-buttons" style={{ display: 'flex', gap: '12px', marginTop: '20px', justifyContent: 'flex-end' }}>
                                 <button className="btn-cancel" onClick={() => setShowModal(false)} style={{ padding: '8px 20px', background: '#e5e7eb', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>Cancelar</button>

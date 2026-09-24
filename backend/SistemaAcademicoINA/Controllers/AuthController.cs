@@ -193,7 +193,7 @@ public class AuthController : ControllerBase
     // ACTIVACIÓN DE CUENTA (estudiantes de nuevo ingreso)
     // =============================================
 
-    // GET: valida un token de activación y devuelve el estado + datos del estudiante para la pantalla de bienvenida.
+    // GET: valida un token de activación y devuelve el estado + datos (estudiante o encargado) para la pantalla de bienvenida.
     [HttpGet("validar-token")]
     public async Task<IActionResult> ValidarToken([FromQuery] string token)
     {
@@ -207,6 +207,7 @@ public class AuthController : ControllerBase
 
         var registro = await _context.TokensActivacion
             .Include(t => t.Usuario)
+                .ThenInclude(u => u.Rol)
             .FirstOrDefaultAsync(t => t.Token == token);
 
         if (registro == null || registro.Usuario == null)
@@ -218,42 +219,94 @@ public class AuthController : ControllerBase
         if (registro.FechaExpiracion < DateTime.Now)
             return Ok(new { estado = "expirado", mensaje = "El enlace ha expirado", usuarioId = registro.Usuario.IdUsuario });
 
-        // Buscar el estudiante asociado (código de usuario == código de estudiante).
-        var estudiante = await _context.Estudiantes
-            .Include(e => e.Clase).ThenInclude(c => c!.Especialidad)
-            .Include(e => e.Clase).ThenInclude(c => c!.Nivel)
-            .FirstOrDefaultAsync(e => e.CodigoEstudiante == registro.Usuario!.Codigo);
+        var usuario = registro.Usuario;
+        var esEncargado = usuario.RolId == 8; // Rol Encargado
 
-        return Ok(new
+        if (esEncargado)
         {
-            estado = "valido",
-            usuarioId = registro.Usuario.IdUsuario,
-            email = registro.Usuario.Correo ?? "",
-            estudianteId = estudiante?.IdEstudiante,
-            estudiante = estudiante == null ? null : new
+            // Buscar el estudiante vinculado al encargado (Usuario.Codigo = "ENC-xxx", buscar por IdReferencia/TipoReferencia)
+            // Como no hay campos explícitos, buscamos por email_encargado en estudiante
+            var estudiante = await _context.Estudiantes
+                .Include(e => e.Clase).ThenInclude(c => c!.Especialidad)
+                .Include(e => e.Clase).ThenInclude(c => c!.Nivel)
+                .FirstOrDefaultAsync(e => e.EmailEncargado == usuario.Correo);
+
+            return Ok(new
             {
-                nombres = estudiante.Nombres,
-                apellidos = estudiante.Apellidos,
-                dui = estudiante.Dui,
-                nie = estudiante.Nie,
-                carnetMenoridad = estudiante.CarnetMenoridad,
-                fechaNacimiento = estudiante.FechaNacimiento,
-                genero = estudiante.Genero,
-                correo = estudiante.CorreoEstudiante,
-                telefonoMovil = estudiante.TelefonoMovil,
-                direccion = estudiante.Direccion,
-                nombreEncargado = estudiante.NombreEncargado,
-                parentescoEncargado = estudiante.ParentescoEncargado,
-                telefonoEncargado = estudiante.TelefonoEncargado,
-                codigoEstudiante = estudiante.CodigoEstudiante,
-                carrera = estudiante.Clase?.Especialidad?.NombreEspecialidad,
-                nivel = estudiante.Clase?.Nivel?.NombreNivel,
-                gradoSeccion = estudiante.Clase != null ? $"{estudiante.Clase.NombreClase} - {estudiante.Clase.Seccion}" : null
-            }
-        });
+                estado = "valido",
+                usuarioId = usuario.IdUsuario,
+                email = usuario.Correo ?? "",
+                rol = "Encargado",
+                estudianteId = estudiante?.IdEstudiante,
+                encargado = new
+                {
+                    nombres = usuario.Nombres,
+                    apellidos = usuario.Apellidos,
+                    correo = usuario.Correo
+                },
+                estudiante = estudiante == null ? null : new
+                {
+                    nombres = estudiante.Nombres,
+                    apellidos = estudiante.Apellidos,
+                    dui = estudiante.Dui,
+                    nie = estudiante.Nie,
+                    carnetMenoridad = estudiante.CarnetMenoridad,
+                    fechaNacimiento = estudiante.FechaNacimiento,
+                    genero = estudiante.Genero,
+                    correo = estudiante.CorreoEstudiante,
+                    telefonoMovil = estudiante.TelefonoMovil,
+                    direccion = estudiante.Direccion,
+                    nombreEncargado = estudiante.NombreEncargado,
+                    parentescoEncargado = estudiante.ParentescoEncargado,
+                    telefonoEncargado = estudiante.TelefonoEncargado,
+                    codigoEstudiante = estudiante.CodigoEstudiante,
+                    carrera = estudiante.Clase?.Especialidad?.NombreEspecialidad,
+                    nivel = estudiante.Clase?.Nivel?.NombreNivel,
+                    gradoSeccion = estudiante.Clase != null ? $"{estudiante.Clase.NombreClase} - {estudiante.Clase.Seccion}" : null
+                }
+            });
+        }
+        else
+        {
+            // Flujo original: Estudiante
+            var estudiante = await _context.Estudiantes
+                .Include(e => e.Clase).ThenInclude(c => c!.Especialidad)
+                .Include(e => e.Clase).ThenInclude(c => c!.Nivel)
+                .FirstOrDefaultAsync(e => e.CodigoEstudiante == usuario.Codigo);
+
+            return Ok(new
+            {
+                estado = "valido",
+                usuarioId = usuario.IdUsuario,
+                email = usuario.Correo ?? "",
+                rol = "Estudiante",
+                estudianteId = estudiante?.IdEstudiante,
+                estudiante = estudiante == null ? null : new
+                {
+                    nombres = estudiante.Nombres,
+                    apellidos = estudiante.Apellidos,
+                    dui = estudiante.Dui,
+                    nie = estudiante.Nie,
+                    carnetMenoridad = estudiante.CarnetMenoridad,
+                    fechaNacimiento = estudiante.FechaNacimiento,
+                    genero = estudiante.Genero,
+                    correo = estudiante.CorreoEstudiante,
+                    telefonoMovil = estudiante.TelefonoMovil,
+                    direccion = estudiante.Direccion,
+                    nombreEncargado = estudiante.NombreEncargado,
+                    parentescoEncargado = estudiante.ParentescoEncargado,
+                    telefonoEncargado = estudiante.TelefonoEncargado,
+                    codigoEstudiante = estudiante.CodigoEstudiante,
+                    carrera = estudiante.Clase?.Especialidad?.NombreEspecialidad,
+                    nivel = estudiante.Clase?.Nivel?.NombreNivel,
+                    gradoSeccion = estudiante.Clase != null ? $"{estudiante.Clase.NombreClase} - {estudiante.Clase.Seccion}" : null
+                }
+            });
+        }
     }
 
     // POST: valida el token, guarda la contraseña (BCrypt), activa la cuenta y marca el token como usado.
+    // Funciona para Estudiante y Encargado (detecta por el rol del usuario en el token).
     [HttpPost("activar-cuenta")]
     public async Task<IActionResult> ActivarCuenta([FromBody] ActivarCuentaRequest request)
     {
@@ -261,6 +314,7 @@ public class AuthController : ControllerBase
         {
             var registro = await _context.TokensActivacion
                 .Include(t => t.Usuario)
+                    .ThenInclude(u => u.Rol)
                 .FirstOrDefaultAsync(t => t.Token == request.Token);
 
             if (registro == null || registro.Usuario == null)
@@ -279,11 +333,14 @@ public class AuthController : ControllerBase
             registro.Usado = true;
 
             var ip = HttpContext.Connection.RemoteIpAddress?.ToString() ?? "0.0.0.0";
+            var esEncargado = registro.Usuario.RolId == 8;
             _context.Auditoria.Add(new Auditoria
             {
                 Usuario = registro.Usuario.Codigo,
                 Accion = "ActivacionCuenta",
-                Detalle = $"Cuenta activada por el estudiante (IP: {ip})",
+                Detalle = esEncargado
+                    ? $"Cuenta de ENCARGADO activada por {registro.Usuario.Correo} (IP: {ip})"
+                    : $"Cuenta de ESTUDIANTE activada por {registro.Usuario.Codigo} (IP: {ip})",
                 Ip = ip,
                 Fecha = DateTime.Now,
                 CreatedAt = DateTime.Now

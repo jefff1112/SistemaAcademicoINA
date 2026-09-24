@@ -115,6 +115,72 @@ public class ConstanciasController : ControllerBase
         });
     }
 
+    // GET: lista constancias del estudiante autenticado (o por ID si es admin).
+    [HttpGet("estudiante/{idEstudiante}")]
+    public async Task<ActionResult<IEnumerable<object>>> GetConstanciasByEstudiante(int idEstudiante)
+    {
+        try
+        {
+            // Verificar autorización: solo el propio estudiante o admin puede ver sus constancias
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userRol = User.FindFirst(ClaimTypes.Role)?.Value;
+            
+            // Si no es admin/director/registro, verificar que sea el propio estudiante
+            if (userRol != "Administrador" && userRol != "Director" && userRol != "Sub Director" && userRol != "Registro Academico")
+            {
+                // Buscar el estudiante asociado al usuario actual
+                var userEmail = User.FindFirst(ClaimTypes.Email)?.Value;
+                var userCodigo = User.FindFirst("codigo")?.Value ?? User.Identity?.Name;
+                
+                // Buscar estudiante por código de usuario
+                var estudianteActual = await _context.Estudiantes
+                    .FirstOrDefaultAsync(e => e.CodigoEstudiante == userCodigo || e.CorreoEstudiante == userEmail);
+                
+                if (estudianteActual == null || estudianteActual.IdEstudiante != idEstudiante)
+                {
+                    return Forbid("No tienes permiso para ver las constancias de este estudiante");
+                }
+            }
+
+            var constancias = await _context.Constancias
+                .Where(c => c.IdEstudiante == idEstudiante)
+                .Include(c => c.Estudiante)
+                .AsNoTracking()
+                .OrderByDescending(c => c.FechaEmision)
+                .ToListAsync();
+
+            var result = constancias.Select(c => new
+            {
+                c.IdConstancia,
+                c.IdEstudiante,
+                c.Tipo,
+                c.Motivo,
+                c.FechaEmision,
+                c.FechaInicio,
+                c.FechaFin,
+                c.CantidadDias,
+                c.Estado,
+                c.NombreArchivo,
+                TieneDocumento = !string.IsNullOrEmpty(c.Documento),
+                c.TrajoDocumento,
+                c.EncargadoPresente,
+                c.PermisoAsistencias,
+                c.GeneradaPor,
+                c.Observaciones,
+                EstudianteNombres = c.Estudiante?.Nombres,
+                EstudianteApellidos = c.Estudiante?.Apellidos,
+                EstudianteCodigo = c.Estudiante?.CodigoEstudiante
+            });
+
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error al obtener constancias del estudiante {IdEstudiante}", idEstudiante);
+            return StatusCode(500, new { mensaje = "Error al obtener constancias" });
+        }
+    }
+
     // GET: lista todas las constancias emitidas (personal).
     [Authorize(Roles = "Administrador,Director,Sub Director,Registro Academico")]
     [HttpGet]

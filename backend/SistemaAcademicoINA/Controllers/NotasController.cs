@@ -305,35 +305,77 @@ public class NotasController : ControllerBase
             var idMateria = materia ?? 0;
 
             var sql = @"
-                SELECT
-                    e.id_estudiante AS IdEstudiante,
-                    e.codigo_estudiante AS CodigoEstudiante,
-                    e.nombres AS Nombres,
-                    e.apellidos AS Apellidos,
-                    c.id_clase AS IdClase,
-                    c.nombre_clase AS NombreClase,
-                    m.id_materia AS IdMateria,
-                    m.nombre_materia AS NombreMateria,
-                    m.tipo_materia AS TipoMateria,
-                    MAX(CASE WHEN p.numero_periodo = 1 THEN rp.nota_acumulada END) AS Periodo1,
-                    MAX(CASE WHEN p.numero_periodo = 2 THEN rp.nota_acumulada END) AS Periodo2,
-                    MAX(CASE WHEN p.numero_periodo = 3 THEN rp.nota_acumulada END) AS Periodo3,
-                    MAX(CASE WHEN p.numero_periodo = 4 THEN rp.nota_acumulada END) AS Periodo4,
-                    ROUND(AVG(rp.nota_acumulada), 2) AS NotaFinal,
-                    CASE WHEN m.tipo_materia = 'Basica' THEN 6.00 ELSE 4.00 END AS NotaMinima,
-                    CASE WHEN ROUND(AVG(rp.nota_acumulada), 2) >= CASE WHEN m.tipo_materia = 'Basica' THEN 6.00 ELSE 4.00 END
+                WITH NotasPorPeriodo AS (
+                    SELECT
+                        e.id_estudiante,
+                        e.codigo_estudiante,
+                        e.nombres,
+                        e.apellidos,
+                        c.id_clase,
+                        c.nombre_clase,
+                        m.id_materia,
+                        m.nombre_materia,
+                        m.tipo_materia,
+                        MAX(CASE WHEN p.numero_periodo = 1 THEN rp.nota_acumulada END) AS Periodo1,
+                        MAX(CASE WHEN p.numero_periodo = 2 THEN rp.nota_acumulada END) AS Periodo2,
+                        MAX(CASE WHEN p.numero_periodo = 3 THEN rp.nota_acumulada END) AS Periodo3,
+                        MAX(CASE WHEN p.numero_periodo = 4 THEN rp.nota_acumulada END) AS Periodo4,
+                        
+                        COALESCE(
+                            CASE WHEN MAX(CASE WHEN p.numero_periodo = 1 THEN rp.nota_recuperacion END) > 0 
+                                 THEN LEAST(MAX(CASE WHEN p.numero_periodo = 1 THEN rp.nota_recuperacion END), 6.0)
+                                 ELSE MAX(CASE WHEN p.numero_periodo = 1 THEN rp.nota_acumulada END) END, 0
+                        ) AS NotaEfP1,
+                        
+                        COALESCE(
+                            CASE WHEN MAX(CASE WHEN p.numero_periodo = 2 THEN rp.nota_recuperacion END) > 0 
+                                 THEN LEAST(MAX(CASE WHEN p.numero_periodo = 2 THEN rp.nota_recuperacion END), 6.0)
+                                 ELSE MAX(CASE WHEN p.numero_periodo = 2 THEN rp.nota_acumulada END) END, 0
+                        ) AS NotaEfP2,
+                        
+                        COALESCE(
+                            CASE WHEN MAX(CASE WHEN p.numero_periodo = 3 THEN rp.nota_recuperacion END) > 0 
+                                 THEN LEAST(MAX(CASE WHEN p.numero_periodo = 3 THEN rp.nota_recuperacion END), 6.0)
+                                 ELSE MAX(CASE WHEN p.numero_periodo = 3 THEN rp.nota_acumulada END) END, 0
+                        ) AS NotaEfP3,
+                        
+                        COALESCE(
+                            CASE WHEN MAX(CASE WHEN p.numero_periodo = 4 THEN rp.nota_recuperacion END) > 0 
+                                 THEN LEAST(MAX(CASE WHEN p.numero_periodo = 4 THEN rp.nota_recuperacion END), 6.0)
+                                 ELSE MAX(CASE WHEN p.numero_periodo = 4 THEN rp.nota_acumulada END) END, 0
+                        ) AS NotaEfP4
+
+                    FROM resultados_periodos rp
+                    JOIN estudiantes e ON rp.id_estudiante = e.id_estudiante
+                    JOIN clases c ON rp.id_clase = c.id_clase
+                    JOIN materias m ON rp.id_materia = m.id_materia
+                    JOIN periodos_academicos p ON rp.id_periodo = p.id_periodo
+                    WHERE p.anio_lectivo = @anio
+                      AND (@clase = 0 OR c.id_clase = @clase)
+                      AND (@materia = 0 OR m.id_materia = @materia)
+                    GROUP BY e.id_estudiante, e.codigo_estudiante, e.nombres, e.apellidos,
+                             c.id_clase, c.nombre_clase, m.id_materia, m.nombre_materia, m.tipo_materia
+                )
+                SELECT 
+                    id_estudiante AS IdEstudiante,
+                    codigo_estudiante AS CodigoEstudiante,
+                    nombres AS Nombres,
+                    apellidos AS Apellidos,
+                    id_clase AS IdClase,
+                    nombre_clase AS NombreClase,
+                    id_materia AS IdMateria,
+                    nombre_materia AS NombreMateria,
+                    tipo_materia AS TipoMateria,
+                    Periodo1,
+                    Periodo2,
+                    Periodo3,
+                    Periodo4,
+                    ROUND((NotaEfP1 + NotaEfP2 + NotaEfP3 + NotaEfP4) / 4.0, 2) AS NotaFinal,
+                    CASE WHEN tipo_materia = 'Basica' THEN 6.00 ELSE 4.00 END AS NotaMinima,
+                    CASE WHEN ROUND((NotaEfP1 + NotaEfP2 + NotaEfP3 + NotaEfP4) / 4.0, 2) >= CASE WHEN tipo_materia = 'Basica' THEN 6.00 ELSE 4.00 END
                         THEN 'APROBADO' ELSE 'REPROBADO' END AS EstadoFinal
-                FROM resultados_periodos rp
-                JOIN estudiantes e ON rp.id_estudiante = e.id_estudiante
-                JOIN clases c ON rp.id_clase = c.id_clase
-                JOIN materias m ON rp.id_materia = m.id_materia
-                JOIN periodos_academicos p ON rp.id_periodo = p.id_periodo
-                WHERE p.anio_lectivo = @anio
-                  AND (@clase = 0 OR c.id_clase = @clase)
-                  AND (@materia = 0 OR m.id_materia = @materia)
-                GROUP BY e.id_estudiante, e.codigo_estudiante, e.nombres, e.apellidos,
-                         c.id_clase, c.nombre_clase, m.id_materia, m.nombre_materia, m.tipo_materia
-                ORDER BY e.apellidos, e.nombres, m.nombre_materia";
+                FROM NotasPorPeriodo
+                ORDER BY apellidos, nombres, nombre_materia";
 
             var notas = await _context.Database
                 .SqlQueryRaw<NotaGeneralDTO>(sql,
@@ -363,34 +405,76 @@ public class NotasController : ControllerBase
             var anioLectivo = DateTime.Now.Year;
 
             var sql = @"
-                SELECT
-                    e.id_estudiante AS IdEstudiante,
-                    e.codigo_estudiante AS CodigoEstudiante,
-                    e.nombres AS Nombres,
-                    e.apellidos AS Apellidos,
-                    c.id_clase AS IdClase,
-                    c.nombre_clase AS NombreClase,
-                    m.id_materia AS IdMateria,
-                    m.nombre_materia AS NombreMateria,
-                    m.tipo_materia AS TipoMateria,
-                    MAX(CASE WHEN p.numero_periodo = 1 THEN rp.nota_acumulada END) AS Periodo1,
-                    MAX(CASE WHEN p.numero_periodo = 2 THEN rp.nota_acumulada END) AS Periodo2,
-                    MAX(CASE WHEN p.numero_periodo = 3 THEN rp.nota_acumulada END) AS Periodo3,
-                    MAX(CASE WHEN p.numero_periodo = 4 THEN rp.nota_acumulada END) AS Periodo4,
-                    ROUND(AVG(rp.nota_acumulada), 2) AS NotaFinal,
-                    CASE WHEN m.tipo_materia = 'Basica' THEN 6.00 ELSE 4.00 END AS NotaMinima,
-                    CASE WHEN ROUND(AVG(rp.nota_acumulada), 2) >= CASE WHEN m.tipo_materia = 'Basica' THEN 6.00 ELSE 4.00 END
+                WITH NotasPorPeriodo AS (
+                    SELECT
+                        e.id_estudiante,
+                        e.codigo_estudiante,
+                        e.nombres,
+                        e.apellidos,
+                        c.id_clase,
+                        c.nombre_clase,
+                        m.id_materia,
+                        m.nombre_materia,
+                        m.tipo_materia,
+                        MAX(CASE WHEN p.numero_periodo = 1 THEN rp.nota_acumulada END) AS Periodo1,
+                        MAX(CASE WHEN p.numero_periodo = 2 THEN rp.nota_acumulada END) AS Periodo2,
+                        MAX(CASE WHEN p.numero_periodo = 3 THEN rp.nota_acumulada END) AS Periodo3,
+                        MAX(CASE WHEN p.numero_periodo = 4 THEN rp.nota_acumulada END) AS Periodo4,
+                        
+                        COALESCE(
+                            CASE WHEN MAX(CASE WHEN p.numero_periodo = 1 THEN rp.nota_recuperacion END) > 0 
+                                 THEN LEAST(MAX(CASE WHEN p.numero_periodo = 1 THEN rp.nota_recuperacion END), 6.0)
+                                 ELSE MAX(CASE WHEN p.numero_periodo = 1 THEN rp.nota_acumulada END) END, 0
+                        ) AS NotaEfP1,
+                        
+                        COALESCE(
+                            CASE WHEN MAX(CASE WHEN p.numero_periodo = 2 THEN rp.nota_recuperacion END) > 0 
+                                 THEN LEAST(MAX(CASE WHEN p.numero_periodo = 2 THEN rp.nota_recuperacion END), 6.0)
+                                 ELSE MAX(CASE WHEN p.numero_periodo = 2 THEN rp.nota_acumulada END) END, 0
+                        ) AS NotaEfP2,
+                        
+                        COALESCE(
+                            CASE WHEN MAX(CASE WHEN p.numero_periodo = 3 THEN rp.nota_recuperacion END) > 0 
+                                 THEN LEAST(MAX(CASE WHEN p.numero_periodo = 3 THEN rp.nota_recuperacion END), 6.0)
+                                 ELSE MAX(CASE WHEN p.numero_periodo = 3 THEN rp.nota_acumulada END) END, 0
+                        ) AS NotaEfP3,
+                        
+                        COALESCE(
+                            CASE WHEN MAX(CASE WHEN p.numero_periodo = 4 THEN rp.nota_recuperacion END) > 0 
+                                 THEN LEAST(MAX(CASE WHEN p.numero_periodo = 4 THEN rp.nota_recuperacion END), 6.0)
+                                 ELSE MAX(CASE WHEN p.numero_periodo = 4 THEN rp.nota_acumulada END) END, 0
+                        ) AS NotaEfP4
+
+                    FROM resultados_periodos rp
+                    JOIN estudiantes e ON rp.id_estudiante = e.id_estudiante
+                    JOIN clases c ON rp.id_clase = c.id_clase
+                    JOIN materias m ON rp.id_materia = m.id_materia
+                    JOIN periodos_academicos p ON rp.id_periodo = p.id_periodo
+                    WHERE p.anio_lectivo = @anio
+                      AND e.id_estudiante = @estudiante
+                    GROUP BY e.id_estudiante, e.codigo_estudiante, e.nombres, e.apellidos,
+                             c.id_clase, c.nombre_clase, m.id_materia, m.nombre_materia, m.tipo_materia
+                )
+                SELECT 
+                    id_estudiante AS IdEstudiante,
+                    codigo_estudiante AS CodigoEstudiante,
+                    nombres AS Nombres,
+                    apellidos AS Apellidos,
+                    id_clase AS IdClase,
+                    nombre_clase AS NombreClase,
+                    id_materia AS IdMateria,
+                    nombre_materia AS NombreMateria,
+                    tipo_materia AS TipoMateria,
+                    Periodo1,
+                    Periodo2,
+                    Periodo3,
+                    Periodo4,
+                    ROUND((NotaEfP1 + NotaEfP2 + NotaEfP3 + NotaEfP4) / 4.0, 2) AS NotaFinal,
+                    CASE WHEN tipo_materia = 'Basica' THEN 6.00 ELSE 4.00 END AS NotaMinima,
+                    CASE WHEN ROUND((NotaEfP1 + NotaEfP2 + NotaEfP3 + NotaEfP4) / 4.0, 2) >= CASE WHEN tipo_materia = 'Basica' THEN 6.00 ELSE 4.00 END
                         THEN 'APROBADO' ELSE 'REPROBADO' END AS EstadoFinal
-                FROM resultados_periodos rp
-                JOIN estudiantes e ON rp.id_estudiante = e.id_estudiante
-                JOIN clases c ON rp.id_clase = c.id_clase
-                JOIN materias m ON rp.id_materia = m.id_materia
-                JOIN periodos_academicos p ON rp.id_periodo = p.id_periodo
-                WHERE p.anio_lectivo = @anio
-                  AND e.id_estudiante = @estudiante
-                GROUP BY e.id_estudiante, e.codigo_estudiante, e.nombres, e.apellidos,
-                         c.id_clase, c.nombre_clase, m.id_materia, m.nombre_materia, m.tipo_materia
-                ORDER BY m.nombre_materia";
+                FROM NotasPorPeriodo
+                ORDER BY nombre_materia";
 
             var notas = await _context.Database
                 .SqlQueryRaw<NotaGeneralDTO>(sql,

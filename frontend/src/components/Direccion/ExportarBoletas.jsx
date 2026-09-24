@@ -20,6 +20,10 @@ const ExportarBoletas = () => {
     const [generando, setGenerando] = useState(false);
     const [mensaje, setMensaje] = useState(null);
     const [mensajeTipo, setMensajeTipo] = useState('success');
+    
+    // FASE 4: Selección individual de estudiantes para exportación
+    const [estudiantesSeleccionados, setEstudiantesSeleccionados] = useState([]);
+    const [seleccionarTodos, setSeleccionarTodos] = useState(true);
 
     // ============================================================
     // CARGA DE DATOS
@@ -33,8 +37,16 @@ const ExportarBoletas = () => {
             cargarEstudiantes();
         } else {
             setEstudiantes([]);
+            setEstudiantesSeleccionados([]);
         }
     }, [claseSeleccionada]);
+
+    // FASE 4: Actualizar selección cuando cambian los estudiantes
+    useEffect(() => {
+        if (estudiantes.length > 0 && seleccionarTodos) {
+            setEstudiantesSeleccionados(estudiantes.map(e => e.idEstudiante));
+        }
+    }, [estudiantes, seleccionarTodos]);
 
     const cargarDatosIniciales = async () => {
         setCargando(true);
@@ -118,29 +130,34 @@ const ExportarBoletas = () => {
             return;
         }
 
-        if (estudiantes.length === 0) {
-            mostrarMensaje('No hay estudiantes en esta clase', 'warning');
+        if (estudiantesSeleccionados.length === 0) {
+            mostrarMensaje('Seleccione al menos un estudiante', 'warning');
             return;
         }
 
         setGenerando(true);
         try {
+            // FASE 4: Filtrar solo los estudiantes seleccionados
+            const estudiantesAExportar = estudiantes.filter(e => 
+                estudiantesSeleccionados.includes(e.idEstudiante)
+            );
+
             if (formatoSeleccionado === 'MINED') {
                 await boletaService.generarPDFMined(
-                    estudiantes,
+                    estudiantesAExportar,
                     parseInt(periodoSeleccionado || 0),
                     parseInt(claseSeleccionada),
                     tipoSeleccionado
                 );
-                mostrarMensaje('Boletas MINED generadas correctamente', 'success');
+                mostrarMensaje(`Boletas MINED generadas correctamente (${estudiantesAExportar.length} estudiante(s))`, 'success');
             } else {
                 await boletaService.generarPDFINA(
-                    estudiantes,
+                    estudiantesAExportar,
                     parseInt(periodoSeleccionado || 0),
                     parseInt(claseSeleccionada),
                     tipoSeleccionado
                 );
-                mostrarMensaje('Boletas INA generadas correctamente', 'success');
+                mostrarMensaje(`Boletas INA generadas correctamente (${estudiantesAExportar.length} estudiante(s))`, 'success');
             }
         } catch (err) {
             console.error('Error al generar boletas:', err);
@@ -154,9 +171,9 @@ const ExportarBoletas = () => {
     // DERIVADOS
     // ============================================================
     const puedeGenerar = useMemo(() => {
-        return claseSeleccionada && estudiantes.length > 0 &&
+        return claseSeleccionada && estudiantesSeleccionados.length > 0 &&
             (tipoSeleccionado === 'global' || periodoSeleccionado);
-    }, [claseSeleccionada, estudiantes, tipoSeleccionado, periodoSeleccionado]);
+    }, [claseSeleccionada, estudiantesSeleccionados, tipoSeleccionado, periodoSeleccionado]);
 
     // ============================================================
     // RENDER
@@ -371,7 +388,11 @@ const ExportarBoletas = () => {
                     <div className="eb-stats">
                         <div className="eb-stat eb-stat-estudiantes">
                             <span className="num">{estudiantes.length}</span>
-                            <span className="lbl">Estudiantes</span>
+                            <span className="lbl">Total Estudiantes</span>
+                        </div>
+                        <div className="eb-stat" style={{ background: '#fef3c7', color: '#b45309' }}>
+                            <span className="num">{estudiantesSeleccionados.length}</span>
+                            <span className="lbl">Seleccionados</span>
                         </div>
                         <div className="eb-stat eb-stat-formato">
                             <span className="num" style={{ fontSize: '14px', paddingTop: '6px' }}>
@@ -413,7 +434,22 @@ const ExportarBoletas = () => {
                                 <table className="eb-tabla">
                                     <thead>
                                         <tr>
-                                            <th style={{ width: '50px' }}>#</th>
+                                            <th style={{ width: '40px', textAlign: 'center' }}>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={seleccionarTodos && estudiantes.length > 0}
+                                                    onChange={(e) => {
+                                                        setSeleccionarTodos(e.target.checked);
+                                                        if (e.target.checked) {
+                                                            setEstudiantesSeleccionados(estudiantes.map(est => est.idEstudiante));
+                                                        } else {
+                                                            setEstudiantesSeleccionados([]);
+                                                        }
+                                                    }}
+                                                    style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                                                />
+                                            </th>
+                                            <th style={{ width: '40px' }}>#</th>
                                             <th style={{ width: '120px' }}>Código</th>
                                             <th>Nombre del Estudiante</th>
                                             <th style={{ width: '120px' }}>NIE</th>
@@ -421,23 +457,41 @@ const ExportarBoletas = () => {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {estudiantes.map((e, index) => (
-                                            <tr key={e.idEstudiante}>
-                                                <td style={{ color: '#64748b' }}>{index + 1}</td>
-                                                <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>
-                                                    {e.codigoEstudiante || '-'}
-                                                </td>
-                                                <td><strong>{formatearNombre(`${e.apellidos || ''}, ${e.nombres || ''}`)}</strong></td>
-                                                <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>
-                                                    {e.nie || '-'}
-                                                </td>
-                                                <td style={{ textAlign: 'center' }}>
-                                                    <span className={`eb-badge ${e.estado ? 'eb-badge-ok' : 'eb-badge-pendiente'}`}>
-                                                        {e.estado ? 'Activo' : 'Inactivo'}
-                                                    </span>
-                                                </td>
-                                            </tr>
-                                        ))}
+                                        {estudiantes.map((e, index) => {
+                                            const isSelected = estudiantesSeleccionados.includes(e.idEstudiante);
+                                            return (
+                                                <tr key={e.idEstudiante} style={{ background: isSelected ? '#f0f9ff' : 'transparent' }}>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isSelected}
+                                                            onChange={(ev) => {
+                                                                if (ev.target.checked) {
+                                                                    setEstudiantesSeleccionados([...estudiantesSeleccionados, e.idEstudiante]);
+                                                                } else {
+                                                                    setEstudiantesSeleccionados(estudiantesSeleccionados.filter(id => id !== e.idEstudiante));
+                                                                    setSeleccionarTodos(false);
+                                                                }
+                                                            }}
+                                                            style={{ cursor: 'pointer', width: '16px', height: '16px' }}
+                                                        />
+                                                    </td>
+                                                    <td style={{ color: '#64748b' }}>{index + 1}</td>
+                                                    <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+                                                        {e.codigoEstudiante || '-'}
+                                                    </td>
+                                                    <td><strong>{formatearNombre(`${e.apellidos || ''}, ${e.nombres || ''}`)}</strong></td>
+                                                    <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>
+                                                        {e.nie || '-'}
+                                                    </td>
+                                                    <td style={{ textAlign: 'center' }}>
+                                                        <span className={`eb-badge ${e.estado ? 'eb-badge-ok' : 'eb-badge-pendiente'}`}>
+                                                            {e.estado ? 'Activo' : 'Inactivo'}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>

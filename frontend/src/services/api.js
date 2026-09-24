@@ -6,7 +6,7 @@ import axios from 'axios';
 // No forzamos Content-Type globalmente para permitir que Axios
 // determine correctamente el encabezado (p.ej. multipart/form-data con boundary).
 const API = axios.create({
-    baseURL: 'http://localhost:5228/api'
+    baseURL: 'http://127.0.0.1:5228/api'
 });
 
 // Interceptor para agregar el token
@@ -16,6 +16,16 @@ API.interceptors.request.use(
 
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
+        }
+        // Log de la URL completa con parámetros
+        if (config.params) {
+            const url = new URL(config.url, config.baseURL);
+            Object.entries(config.params).forEach(([key, value]) => {
+                url.searchParams.append(key, value);
+            });
+            console.log('📤 API Request:', config.method?.toUpperCase(), url.toString());
+        } else {
+            console.log('📤 API Request:', config.method?.toUpperCase(), config.baseURL + config.url);
         }
         return config;
     },
