@@ -5,6 +5,9 @@ import axios from 'axios';
 // Instancia Axios con la URL base del backend.
 // No forzamos Content-Type globalmente para permitir que Axios
 // determine correctamente el encabezado (p.ej. multipart/form-data con boundary).
+// En producción se usa REACT_APP_API_URL, en desarrollo fallback a localhost.
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5228/api';
+
 const API = axios.create({
     baseURL: 'http://127.0.0.1:5228/api'
 });
