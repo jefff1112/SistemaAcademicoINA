@@ -772,10 +772,25 @@ public class AspirantesController : ControllerBase
                     // ============================================================
                     // CREAR PERSONA Y RELACIÓN FAMILIAR PARA EL ENCARGADO
                     // ============================================================
+                    // Verificar unicidad del DUI del encargado en tabla personas
+                    // Si está vacío o duplicado, generar uno único
+                    string duiEncargado = aspirante.DuiEncargado?.Trim() ?? "";
+                    bool duiExiste = false;
+                    if (!string.IsNullOrEmpty(duiEncargado))
+                    {
+                        duiExiste = await _context.Personas.AnyAsync(p => p.NumeroDocumento == duiEncargado && p.TipoDocumento == "DUI");
+                    }
+                    
+                    if (string.IsNullOrEmpty(duiEncargado) || duiExiste)
+                    {
+                        // Generar DUI único: ENC-DUI-{IdUsuario}
+                        duiEncargado = $"ENC-DUI-{usuarioEncargado.IdUsuario}";
+                    }
+
                     var personaEncargado = new Persona
                     {
                         TipoDocumento = "DUI",
-                        NumeroDocumento = aspirante.DuiEncargado ?? "",
+                        NumeroDocumento = duiEncargado,
                         Nombres = aspirante.NombreEncargado ?? "",
                         Apellidos = aspirante.Apellidos ?? "",
                         TelefonoPrincipal = aspirante.TelefonoEncargado ?? "",

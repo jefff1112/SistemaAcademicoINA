@@ -96,7 +96,7 @@ const PreinscripcionForm = () => {
                     </div>
                     <div>
                         <label className="block text-gray-700 text-sm font-bold mb-2">Correo del Encargado *</label>
-                        <input type="email" name="emailEncargado" value={formData.emailEncargado} onChange={handleChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="correo@encargado.com" />
+                        <input type="email" name="emailEncargado" value={formData.emailEncargado} onChange={handleChange} required className="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="correo@encargado.com" />
                     </div>
                     <div className="md:col-span-2">
                         <label className="block text-gray-700 text-sm font-bold mb-2">Escuela de Procedencia</label>
