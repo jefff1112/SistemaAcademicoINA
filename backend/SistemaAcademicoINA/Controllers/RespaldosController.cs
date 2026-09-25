@@ -82,6 +82,38 @@ public class RespaldosController : ControllerBase
         }
     }
 
+    // GET: descarga un archivo de respaldo.
+    [HttpGet("{nombre}/descargar")]
+    public IActionResult DescargarRespaldo(string nombre)
+    {
+        try
+        {
+            var respaldosFolder = Path.Combine(_environment.ContentRootPath, "Respaldos");
+
+            var nombreLimpio = Path.GetFileName(nombre);
+            // Validar nombre seguro
+            if (!System.Text.RegularExpressions.Regex.IsMatch(nombreLimpio, @"^backup_\d{8}_\d{6}\.sql$") &&
+                !System.Text.RegularExpressions.Regex.IsMatch(nombreLimpio, @"^baseline_.*\.sql$") &&
+                !System.Text.RegularExpressions.Regex.IsMatch(nombreLimpio, @"^alter_.*\.sql$") &&
+                !System.Text.RegularExpressions.Regex.IsMatch(nombreLimpio, @"^agregar_.*\.sql$"))
+            {
+                return BadRequest(new { mensaje = "Nombre de archivo no valido" });
+            }
+
+            var filePath = Path.Combine(respaldosFolder, nombreLimpio);
+
+            if (!System.IO.File.Exists(filePath))
+                return NotFound(new { mensaje = "Archivo no encontrado" });
+
+            var fileBytes = System.IO.File.ReadAllBytes(filePath);
+            return File(fileBytes, "application/sql", nombreLimpio);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { mensaje = "Error al descargar respaldo", error = ex.Message });
+        }
+    }
+
     // DELETE: elimina un archivo de respaldo, validando el formato del nombre.
     [HttpDelete("{nombre}")]
     public IActionResult DeleteRespaldo(string nombre)

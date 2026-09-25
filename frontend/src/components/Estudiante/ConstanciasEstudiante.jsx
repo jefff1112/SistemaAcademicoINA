@@ -13,7 +13,6 @@ const ConstanciasEstudiante = () => {
     const [detalle, setDetalle] = useState(null);
     const [descargando, setDescargando] = useState(false);
     const [busqueda, setBusqueda] = useState('');
-    const [filterTipo, setFilterTipo] = useState('');
     const [estudiante, setEstudiante] = useState(null);
 
     // ============================================================
@@ -152,8 +151,6 @@ const ConstanciasEstudiante = () => {
     // ============================================================
     const tipoLabel = (tipo) => {
         const tipos = {
-            Estudio: 'Constancia de Estudio',
-            Conducta: 'Constancia de Conducta',
             Incapacidad: 'Incapacidad / Permiso'
         };
         return tipos[tipo] || tipo;
@@ -189,8 +186,6 @@ const ConstanciasEstudiante = () => {
 
     const getTipoBadge = (tipo) => {
         switch (tipo) {
-            case 'Estudio': return { bg: '#dbeafe', color: '#1d4ed8', border: '#3b82f6' };
-            case 'Conducta': return { bg: '#dcfce7', color: '#15803d', border: '#16a34a' };
             case 'Incapacidad': return { bg: '#fef3c7', color: '#b45309', border: '#e67e22' };
             default: return { bg: '#f1f5f9', color: '#475569', border: '#94a3b8' };
         }
@@ -220,17 +215,10 @@ const ConstanciasEstudiante = () => {
     // ============================================================
     // FILTRADO Y ESTADÍSTICAS
     // ============================================================
-    const tiposDisponibles = useMemo(() => {
-        const set = new Set();
-        constancias.forEach(c => {
-            if (c.tipo) set.add(c.tipo);
-        });
-        return Array.from(set);
-    }, [constancias]);
-
     const constanciasFiltradas = useMemo(() => {
         return constancias.filter(c => {
-            if (filterTipo && c.tipo !== filterTipo) return false;
+            // Solo mostrar tipo Incapacidad (Permiso)
+            if (c.tipo !== 'Incapacidad') return false;
             if (busqueda) {
                 const term = busqueda.toLowerCase();
                 return (
@@ -241,7 +229,7 @@ const ConstanciasEstudiante = () => {
             }
             return true;
         });
-    }, [constancias, filterTipo, busqueda]);
+    }, [constancias, busqueda]);
 
     const activas = constanciasFiltradas.filter(c => c.estado === 'Activa');
     const historial = constanciasFiltradas.filter(c => c.estado !== 'Activa');
@@ -253,10 +241,9 @@ const ConstanciasEstudiante = () => {
         conDocumento: constancias.filter(c => c.tieneDocumento).length
     }), [constancias]);
 
-    const filtrosActivos = (filterTipo ? 1 : 0) + (busqueda ? 1 : 0);
+    const filtrosActivos = (busqueda ? 1 : 0);
 
     const limpiarFiltros = () => {
-        setFilterTipo('');
         setBusqueda('');
     };
 
@@ -431,30 +418,15 @@ const ConstanciasEstudiante = () => {
                                 </span>
                             )}
                         </h3>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '14px' }}>
-                            <div>
-                                <label style={S.label}>Tipo</label>
-                                <select
-                                    value={filterTipo}
-                                    onChange={(e) => setFilterTipo(e.target.value)}
-                                    style={S.input}
-                                >
-                                    <option value="">Todos los tipos</option>
-                                    {tiposDisponibles.map(t => (
-                                        <option key={t} value={t}>{tipoLabel(t)}</option>
-                                    ))}
-                                </select>
-                            </div>
-                            <div>
-                                <label style={S.label}>Buscar</label>
-                                <input
-                                    type="text"
-                                    placeholder="Buscar por motivo, tipo o quién emitió..."
-                                    value={busqueda}
-                                    onChange={(e) => setBusqueda(e.target.value)}
-                                    style={S.input}
-                                />
-                            </div>
+                        <div>
+                            <label style={S.label}>Buscar</label>
+                            <input
+                                type="text"
+                                placeholder="Buscar por motivo o quién emitió..."
+                                value={busqueda}
+                                onChange={(e) => setBusqueda(e.target.value)}
+                                style={S.input}
+                            />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px', marginTop: '14px' }}>
                             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
