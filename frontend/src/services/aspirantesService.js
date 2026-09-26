@@ -1,4 +1,4 @@
-// Servicio de API: gestiona aspirantes, cupos y el proceso de admisión (CRUD y flujos de registro/rechazo).
+// Servicio de API: gestiona aspirantes, cupos y el proceso de admisión
 import API from './api';
 
 export const getAspirantes = async () => {
@@ -21,58 +21,27 @@ export const getAspirante = async (id) => {
     }
 };
 
+// ============================================================
+// Crear aspirante: usa axios con FormData.
+// Axios detecta automáticamente FormData y establece el
+// Content-Type correcto (multipart/form-data + boundary).
+// NO forzar Content-Type manualmente.
+// ============================================================
 export const createAspirante = async (data) => {
     try {
-        if (data instanceof FormData) {
-            const token = localStorage.getItem('token');
-            const baseURL = API.defaults?.baseURL || '';
-            const url = `${baseURL}/aspirantes`;
-
-            const headers = {
-                ...(token ? { Authorization: `Bearer ${token}` } : {})
-            };
-
-            const resp = await fetch(url, {
-                method: 'POST',
-                body: data,
-                headers
-            });
-
-            const resJson = await resp.json().catch(() => ({}));
-
-            if (!resp.ok) {
-                // Log detallado para debugging
-                console.error('❌ Backend error response:', {
-                    status: resp.status,
-                    statusText: resp.statusText,
-                    data: resJson
-                });
-                
-                const mensaje = resJson?.mensaje 
-                    || resJson?.message 
-                    || resJson?.error 
-                    || resJson?.title 
-                    || JSON.stringify(resJson)
-                    || `Error HTTP ${resp.status}: ${resp.statusText}`;
-                
-                const error = new Error(mensaje);
-                error.response = { data: resJson, status: resp.status };
-                throw error;
-            }
-            return resJson;
-        }
-
         const response = await API.post('/aspirantes', data);
         return response.data;
     } catch (error) {
         console.error('Error al crear aspirante:', error);
+        console.error('Response:', error.response?.data);
+        console.error('Status:', error.response?.status);
         throw error;
     }
 };
 
 export const updateAspirante = async (id, data) => {
     try {
-        const response = await API.patch(`/aspirantes/${id}`, data);
+        const response = await API.put(`/aspirantes/${id}`, data);
         return response.data;
     } catch (error) {
         console.error('Error al actualizar aspirante:', error);
@@ -184,14 +153,10 @@ export const verificarAspirante = async (campo, valor) => {
     try {
         const params = {};
         params[campo] = valor.trim();
-        console.log('🔍 verificarAspirante params:', params);
-        
         const response = await API.get('/aspirantes/verificar', { params });
-        console.log('✅ verificarAspirante response:', response.data);
         return response.data;
     } catch (error) {
-        console.error('❌ Error al verificar:', error);
-        console.error('❌ Error config:', error.config);
+        console.error('Error al verificar:', error);
         throw error;
     }
 };

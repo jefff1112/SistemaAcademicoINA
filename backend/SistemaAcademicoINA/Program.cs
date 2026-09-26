@@ -55,8 +55,15 @@ builder.Services.AddScoped<DocumentoService>();
 // ============================================================
 // 4. CORREO ELECTRÓNICO (MailKit + cola en background)
 // ============================================================
+// IMPORTANTE:
+// - EmailQueue: Singleton (canal compartido entre productores y consumidor)
+// - IEmailService (SmtpEmailService): Scoped (cada envío crea su propio SmtpClient)
+// - EmailBackgroundService: HostedService (Singleton por naturaleza, resuelve
+//   IEmailService y AuditoriaHelper dentro de un scope por mensaje)
+// - PlantillasCorreoService: Singleton (solo lee archivos y reemplaza placeholders)
+// - RateLimiterService: Singleton (diccionario en memoria)
 builder.Services.AddSingleton<EmailQueue>();
-builder.Services.AddSingleton<IEmailService, SmtpEmailService>();
+builder.Services.AddScoped<IEmailService, SmtpEmailService>();
 builder.Services.AddHostedService<EmailBackgroundService>();
 builder.Services.AddSingleton<PlantillasCorreoService>();
 builder.Services.AddSingleton<RateLimiterService>();
@@ -105,7 +112,10 @@ builder.Services.AddAuthorization();
 // Ej: FRONTEND_URLS=https://mi-frontend.onrender.com,http://localhost:3000
 var corsOrigins = builder.Configuration["FRONTEND_URLS"]?
     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-    ?? new[] { "http://localhost:3000", "http://localhost:3001", "http://127.0.0.1:3000", "http://127.0.0.1:3001" };
+    ?? new[] {
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    };
 
 builder.Services.AddCors(options =>
 {
@@ -139,6 +149,7 @@ if (builder.Environment.IsDevelopment())
     builder.Logging.SetMinimumLevel(LogLevel.Debug);
     builder.Logging.AddFilter("Microsoft.AspNetCore.Routing", LogLevel.Debug);
     builder.Logging.AddFilter("Microsoft.AspNetCore.Mvc", LogLevel.Debug);
+    builder.Logging.AddFilter("SistemaAcademicoINA.Services", LogLevel.Debug);
 }
 
 // ============================================================
@@ -178,11 +189,21 @@ builder.Services.AddSwaggerGen(c =>
 var app = builder.Build();
 
 // ============================================================
-// CONFIGURACIÓN DE PUERTO PARA RENDER (lee variable PORT)
+// CONFIGURACIÓN DE PUERTOS LOCALES
 // ============================================================
-var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
-app.Urls.Clear();
-app.Urls.Add($"http://0.0.0.0:{port}");
+// Backend en desarrollo: http://localhost:5080
+// En producción (Render, etc.) se sigue leyendo la variable PORT.
+if (app.Environment.IsDevelopment())
+{
+    app.Urls.Clear();
+    app.Urls.Add("http://localhost:5080");
+}
+else
+{
+    var port = Environment.GetEnvironmentVariable("PORT") ?? "10000";
+    app.Urls.Clear();
+    app.Urls.Add($"http://0.0.0.0:{port}");
+}
 
 // ============================================================
 // PIPELINE DE MIDDLEWARE

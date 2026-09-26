@@ -1,4 +1,4 @@
-// Componente Gestión de Aspirantes (Dirección) - MEJORADO
+// Componente Gestión de Aspirantes (Dirección) - CORREGIDO
 // Evalúa notas, aprueba, rechaza o pone en espera aspirantes.
 // Incluye filtro por especialidad (con Bachillerato General) y estado.
 import React, { useState, useEffect, useMemo } from 'react';
@@ -22,6 +22,7 @@ const GestionAspirantesDireccion = () => {
     const [showModalRechazo, setShowModalRechazo] = useState(false);
     const [showModalEspera, setShowModalEspera] = useState(false);
     const [showModalDocumentos, setShowModalDocumentos] = useState(false);
+    const [showModalDetalle, setShowModalDetalle] = useState(false);
 
     const [selectedAspirante, setSelectedAspirante] = useState(null);
     const [errorAprobar, setErrorAprobar] = useState('');
@@ -60,10 +61,26 @@ const GestionAspirantesDireccion = () => {
             setClases(clasesRes.data || []);
             setEspecialidades(especialidadesRes.data || []);
         } catch (error) {
-            mostrarMensaje('Error al cargar datos', 'error');
+            mostrarMensaje('Error al cargar datos: ' + (error.response?.data?.mensaje || error.message), 'error');
         } finally {
             setLoading(false);
         }
+    };
+
+    // ============================================================
+    // DIAGNÓSTICO DEL ASPIRANTE
+    // ============================================================
+    // Devuelve el motivo por el cual un aspirante no puede aprobarse.
+    // Retorna null si está todo OK.
+    const getMotivoNoAprobable = (a) => {
+        if (!a) return 'Aspirante no válido';
+        if (a.estadoSolicitud === 'Aprobado') return 'Ya fue aprobado';
+        if (a.estadoSolicitud === 'Rechazado') return 'Fue rechazado';
+        if (a.idEstudianteGenerado) return 'Ya fue matriculado';
+        if (!a.nie || String(a.nie).trim() === '') return 'Sin NIE registrado';
+        if (!a.notaExamen && !a.exonerado) return 'Sin nota de examen';
+        if (a.notaExamen && parseFloat(a.notaExamen) < 6) return 'Nota menor a 6';
+        return null;
     };
 
     // ============================================================
@@ -79,6 +96,8 @@ const GestionAspirantesDireccion = () => {
         const disponible = Number(max) - Number(actual);
         return isNaN(disponible) ? 0 : disponible;
     };
+
+    const getIdClase = (c) => c.idClase ?? c.IdClase ?? c.id ?? null;
 
     // ============================================================
     // REABRIR ASPIRANTE
@@ -103,33 +122,29 @@ const GestionAspirantesDireccion = () => {
     const mostrarMensaje = (texto, tipo) => {
         setMessage(texto);
         setMessageType(tipo);
-        setTimeout(() => setMessage(''), 4000);
+        setTimeout(() => setMessage(''), 5000);
     };
 
     // ============================================================
     // HELPERS DE ESPECIALIDAD
     // ============================================================
     const getEspecialidadNombre = (id) => {
-        if (!id) return 'Bachillerato General';
-        const esp = especialidades.find(e => e.idEspecialidad === Number(id));
+        if (id === null || id === undefined || id === 0 || id === '0') {
+            return 'Bachillerato General';
+        }
+        const esp = especialidades.find(e => Number(e.idEspecialidad) === Number(id));
         return esp ? esp.nombreEspecialidad : 'Bachillerato General';
     };
 
-    // Lista de especialidades + "Bachillerato General" (id = 0)
-    // Solo agrega "Bachillerato General" si NO viene ya desde la API.
     const especialidadesConGeneral = useMemo(() => {
         const lista = [...especialidades];
-
-        // Verifica si ya existe una especialidad con id 0 o con nombre "Bachillerato General"
         const yaExiste = lista.some(e =>
-            e.idEspecialidad === 0 ||
+            Number(e.idEspecialidad) === 0 ||
             (e.nombreEspecialidad && e.nombreEspecialidad.toLowerCase().includes('bachillerato general'))
         );
-
         if (!yaExiste) {
             lista.unshift({ idEspecialidad: 0, nombreEspecialidad: 'Bachillerato General' });
         }
-
         return lista;
     }, [especialidades]);
 
@@ -156,7 +171,7 @@ const GestionAspirantesDireccion = () => {
             setSelectedAspirante(aspirante);
             setShowModalDocumentos(true);
         } catch (error) {
-            mostrarMensaje('Error al cargar documentos', 'error');
+            mostrarMensaje('Error al cargar documentos: ' + (error.response?.data?.mensaje || error.message), 'error');
         }
     };
 
@@ -165,21 +180,22 @@ const GestionAspirantesDireccion = () => {
     // ============================================================
     const handleRegistrarNota = async () => {
         if (!selectedAspirante) return;
-        if (!formData.notaExamen || parseFloat(formData.notaExamen) < 0 || parseFloat(formData.notaExamen) > 10) {
-            mostrarMensaje('Ingrese una nota valida entre 0 y 10', 'error');
+        const nota = parseFloat(formData.notaExamen);
+        if (isNaN(nota) || nota < 0 || nota > 10) {
+            mostrarMensaje('Ingrese una nota válida entre 0 y 10', 'error');
             return;
         }
         setSaving(true);
         try {
             await API.post('/aspirantes/sp_registrar_nota_examen', {
                 p_id_aspirante: selectedAspirante.idAspirante,
-                p_nota_examen: parseFloat(formData.notaExamen)
+                p_nota_examen: nota
             });
             mostrarMensaje('Nota registrada correctamente', 'success');
             setShowModalNota(false);
             setAspirantes(prev => prev.map(a =>
                 a.idAspirante === selectedAspirante.idAspirante
-                    ? { ...a, notaExamen: parseFloat(formData.notaExamen) }
+                    ? { ...a, notaExamen: nota }
                     : a
             ));
             setSelectedAspirante(null);
@@ -192,19 +208,47 @@ const GestionAspirantesDireccion = () => {
     };
 
     // ============================================================
+    // ABRIR MODAL APROBAR
+    // ============================================================
+    const abrirModalAprobar = (aspirante) => {
+        const motivo = getMotivoNoAprobable(aspirante);
+        if (motivo) {
+            mostrarMensaje('No se puede aprobar: ' + motivo, 'error');
+            return;
+        }
+
+        setSelectedAspirante(aspirante);
+        setErrorAprobar('');
+
+        // Inicializar especialidad con la del aspirante (o 0 si es general)
+        const espInicial = (aspirante.especialidadAspira === null || aspirante.especialidadAspira === undefined)
+            ? '0'
+            : String(aspirante.especialidadAspira);
+
+        setFormData({
+            ...formData,
+            especialidadId: espInicial,
+            seccion: 'A',
+            idClaseAsignada: ''
+        });
+
+        setShowModalAprobar(true);
+    };
+
+    // ============================================================
     // APROBAR
     // ============================================================
     const handleAprobar = async () => {
-        if (!selectedAspirante) return;
+        if (!selectedAspirante) {
+            mostrarMensaje('No hay aspirante seleccionado', 'error');
+            return;
+        }
         if (!formData.idClaseAsignada) {
             mostrarMensaje('Seleccione una clase con cupo disponible', 'error');
             return;
         }
 
-        const claseSeleccionada = clases.find(c => {
-            const id = c.idClase ?? c.IdClase ?? c.id;
-            return Number(id) === Number(formData.idClaseAsignada);
-        });
+        const claseSeleccionada = clases.find(c => Number(getIdClase(c)) === Number(formData.idClaseAsignada));
         if (!claseSeleccionada) {
             mostrarMensaje('La clase seleccionada no existe', 'error');
             return;
@@ -215,28 +259,37 @@ const GestionAspirantesDireccion = () => {
         }
 
         const nota = parseFloat(selectedAspirante.notaExamen || 0);
-        if (nota < 6) {
-            mostrarMensaje('La nota minima para aprobar es 6', 'error');
+        if (nota < 6 && !selectedAspirante.exonerado) {
+            mostrarMensaje('La nota mínima para aprobar es 6', 'error');
             return;
         }
 
         setSaving(true);
+        setErrorAprobar('');
         try {
-            await API.put(`/aspirantes/aprobar/${selectedAspirante.idAspirante}`, {
+            const response = await API.put(`/aspirantes/aprobar/${selectedAspirante.idAspirante}`, {
                 idClaseAsignada: Number(formData.idClaseAsignada),
                 aprobadoPor: 'Direccion'
             });
-            mostrarMensaje('Aspirante aprobado. La matrícula la realizará Registro Académico', 'success');
+
+            mostrarMensaje(
+                response.data?.mensaje || 'Aspirante aprobado. La matrícula la realizará Registro Académico',
+                'success'
+            );
             setShowModalAprobar(false);
-            setAspirantes(prev => prev.map(a =>
-                a.idAspirante === selectedAspirante.idAspirante
-                    ? { ...a, estadoSolicitud: 'Aprobado', idClaseAsignada: Number(formData.idClaseAsignada) }
-                    : a
-            ));
+
+            // Recargar toda la lista para reflejar el estado real del backend
+            await cargarDatos();
+
             setSelectedAspirante(null);
             setFormData({ ...formData, especialidadId: '', seccion: 'A', idClaseAsignada: '' });
         } catch (error) {
-            mostrarMensaje(error.response?.data?.mensaje || 'Error al aprobar', 'error');
+            const msg = error.response?.data?.mensaje
+                || error.response?.data?.title
+                || error.message
+                || 'Error al aprobar el aspirante';
+            setErrorAprobar(msg);
+            mostrarMensaje(msg, 'error');
         } finally {
             setSaving(false);
         }
@@ -259,11 +312,7 @@ const GestionAspirantesDireccion = () => {
             });
             mostrarMensaje('Aspirante rechazado correctamente', 'success');
             setShowModalRechazo(false);
-            setAspirantes(prev => prev.map(a =>
-                a.idAspirante === selectedAspirante.idAspirante
-                    ? { ...a, estadoSolicitud: 'Rechazado' }
-                    : a
-            ));
+            await cargarDatos();
             setSelectedAspirante(null);
             setFormData({ ...formData, motivo: '' });
         } catch (error) {
@@ -279,7 +328,7 @@ const GestionAspirantesDireccion = () => {
     const handleEspera = async () => {
         if (!selectedAspirante) return;
         if (!formData.observacion.trim()) {
-            mostrarMensaje('Ingrese una observacion', 'error');
+            mostrarMensaje('Ingrese una observación', 'error');
             return;
         }
         setSaving(true);
@@ -290,11 +339,7 @@ const GestionAspirantesDireccion = () => {
             });
             mostrarMensaje('Aspirante en lista de espera', 'success');
             setShowModalEspera(false);
-            setAspirantes(prev => prev.map(a =>
-                a.idAspirante === selectedAspirante.idAspirante
-                    ? { ...a, estadoSolicitud: 'En Espera' }
-                    : a
-            ));
+            await cargarDatos();
             setSelectedAspirante(null);
             setFormData({ ...formData, observacion: '' });
         } catch (error) {
@@ -309,21 +354,21 @@ const GestionAspirantesDireccion = () => {
     // ============================================================
     const aspirantesFiltrados = useMemo(() => {
         return aspirantes.filter(a => {
-            // Filtro por estado
             if (filterEstado !== 'todos' && a.estadoSolicitud !== filterEstado) return false;
 
-            // Filtro por especialidad (0 = Bachillerato General = sin especialidad)
             if (filterEspecialidad !== 'todas') {
                 const espFiltro = parseInt(filterEspecialidad);
-                const espAspirante = a.especialidadAspira ? Number(a.especialidadAspira) : 0;
+                const espAspirante = (a.especialidadAspira === null || a.especialidadAspira === undefined)
+                    ? 0
+                    : Number(a.especialidadAspira);
+
                 if (espFiltro === 0) {
-                    if (espAspirante !== 0 && espAspirante !== null) return false;
+                    if (espAspirante !== 0) return false;
                 } else {
                     if (espAspirante !== espFiltro) return false;
                 }
             }
 
-            // Búsqueda
             if (searchTerm) {
                 const term = searchTerm.toLowerCase();
                 return (
@@ -337,13 +382,14 @@ const GestionAspirantesDireccion = () => {
         });
     }, [aspirantes, filterEstado, filterEspecialidad, searchTerm]);
 
-    // Estadísticas
     const stats = useMemo(() => {
         const base = aspirantes.filter(a => {
             if (filterEspecialidad === 'todas') return true;
             const espFiltro = parseInt(filterEspecialidad);
-            const espAspirante = a.especialidadAspira ? Number(a.especialidadAspira) : 0;
-            if (espFiltro === 0) return espAspirante === 0 || espAspirante === null;
+            const espAspirante = (a.especialidadAspira === null || a.especialidadAspira === undefined)
+                ? 0
+                : Number(a.especialidadAspira);
+            if (espFiltro === 0) return espAspirante === 0;
             return espAspirante === espFiltro;
         });
 
@@ -462,6 +508,8 @@ const GestionAspirantesDireccion = () => {
                 .ga-modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
 
                 .ga-info-box { background: #eff6ff; border-left: 4px solid #3b82f6; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #1e40af; }
+                .ga-error-box { background: #fee2e2; border-left: 4px solid #dc2626; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 13px; color: #b91c1c; }
+                .ga-warning-box { background: #fef3c7; border-left: 4px solid #e67e22; padding: 10px 14px; border-radius: 8px; margin-bottom: 12px; font-size: 12px; color: #b45309; }
 
                 .ga-acciones { display: flex; gap: 6px; flex-wrap: wrap; }
 
@@ -552,7 +600,7 @@ const GestionAspirantesDireccion = () => {
                                     <th>Especialidad</th>
                                     <th style={{ width: '120px' }}>Estado</th>
                                     <th style={{ width: '100px', textAlign: 'center' }}>Documentos</th>
-                                    <th style={{ width: '280px' }}>Acciones</th>
+                                    <th style={{ width: '320px' }}>Acciones</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -565,13 +613,17 @@ const GestionAspirantesDireccion = () => {
                                 ) : (
                                     aspirantesFiltrados.map((a) => {
                                         const colores = getEstadoColor(a.estadoSolicitud);
+                                        const motivoNoAprobable = getMotivoNoAprobable(a);
+                                        const esAprobable = motivoNoAprobable === null;
+                                        const puedeRegistrarNota = a.estadoSolicitud === 'Pendiente' && (!a.notaExamen || a.notaExamen === 0);
+
                                         return (
                                             <tr key={a.idAspirante}>
                                                 <td style={{ color: '#64748b' }}>{a.idAspirante}</td>
                                                 <td><strong>{a.nombres}</strong></td>
                                                 <td>{a.apellidos}</td>
                                                 <td style={{ fontFamily: 'monospace', fontSize: '12px' }}>
-                                                    {a.nie || '-'}
+                                                    {a.nie || <span style={{ color: '#dc2626' }}>Sin NIE</span>}
                                                 </td>
                                                 <td style={{ textAlign: 'center' }}>
                                                     <span
@@ -607,11 +659,13 @@ const GestionAspirantesDireccion = () => {
                                                 </td>
                                                 <td>
                                                     <div className="ga-acciones">
-                                                        {a.estadoSolicitud === 'Pendiente' && !a.notaExamen && (
+                                                        {/* Registrar Nota */}
+                                                        {puedeRegistrarNota && (
                                                             <button
                                                                 className="ga-btn ga-btn-primary ga-btn-sm"
                                                                 onClick={() => {
                                                                     setSelectedAspirante(a);
+                                                                    setFormData({ ...formData, notaExamen: '' });
                                                                     setShowModalNota(true);
                                                                 }}
                                                             >
@@ -619,17 +673,12 @@ const GestionAspirantesDireccion = () => {
                                                             </button>
                                                         )}
 
-                                                        {a.estadoSolicitud === 'Pendiente' && a.notaExamen && (
+                                                        {/* Aprobar / Espera — solo si es aprobable */}
+                                                        {esAprobable && (
                                                             <>
                                                                 <button
                                                                     className="ga-btn ga-btn-success ga-btn-sm"
-                                                                    onClick={() => {
-                                                                        setSelectedAspirante(a);
-                                                                        setErrorAprobar('');
-                                                                        const espInicial = a.especialidadAspira ? String(a.especialidadAspira) : '0';
-                                                                        setFormData({ ...formData, especialidadId: espInicial, seccion: 'A', idClaseAsignada: '' });
-                                                                        setShowModalAprobar(true);
-                                                                    }}
+                                                                    onClick={() => abrirModalAprobar(a)}
                                                                 >
                                                                     Aprobar
                                                                 </button>
@@ -637,6 +686,7 @@ const GestionAspirantesDireccion = () => {
                                                                     className="ga-btn ga-btn-warning ga-btn-sm"
                                                                     onClick={() => {
                                                                         setSelectedAspirante(a);
+                                                                        setFormData({ ...formData, observacion: '' });
                                                                         setShowModalEspera(true);
                                                                     }}
                                                                 >
@@ -645,11 +695,13 @@ const GestionAspirantesDireccion = () => {
                                                             </>
                                                         )}
 
+                                                        {/* Rechazar */}
                                                         {a.estadoSolicitud === 'Pendiente' && (
                                                             <button
                                                                 className="ga-btn ga-btn-danger ga-btn-sm"
                                                                 onClick={() => {
                                                                     setSelectedAspirante(a);
+                                                                    setFormData({ ...formData, motivo: '' });
                                                                     setShowModalRechazo(true);
                                                                 }}
                                                             >
@@ -657,6 +709,7 @@ const GestionAspirantesDireccion = () => {
                                                             </button>
                                                         )}
 
+                                                        {/* Reabrir */}
                                                         {(a.estadoSolicitud === 'Rechazado' || a.estadoSolicitud === 'En Espera') && (
                                                             <button
                                                                 className="ga-btn ga-btn-primary ga-btn-sm"
@@ -666,6 +719,21 @@ const GestionAspirantesDireccion = () => {
                                                             </button>
                                                         )}
 
+                                                        {/* Motivo si no se puede aprobar */}
+                                                        {a.estadoSolicitud === 'Pendiente' && motivoNoAprobable && (
+                                                            <span style={{
+                                                                fontSize: '11px',
+                                                                color: '#b45309',
+                                                                background: '#fef3c7',
+                                                                padding: '4px 8px',
+                                                                borderRadius: '6px',
+                                                                alignSelf: 'center'
+                                                            }}>
+                                                                {motivoNoAprobable}
+                                                            </span>
+                                                        )}
+
+                                                        {/* Aprobado */}
                                                         {a.estadoSolicitud === 'Aprobado' && (
                                                             <span style={{ fontSize: '12px', color: '#15803d', fontWeight: '600' }}>
                                                                 Pendiente de matrícula
@@ -777,17 +845,28 @@ const GestionAspirantesDireccion = () => {
             )}
 
             {/* MODAL APROBAR */}
-            {showModalAprobar && (
+            {showModalAprobar && selectedAspirante && (
                 <div className="ga-modal-overlay" onClick={() => !saving && setShowModalAprobar(false)}>
                     <div className="ga-modal" onClick={e => e.stopPropagation()}>
                         <div className="ga-modal-header">
                             <h3>Aprobar Aspirante</h3>
                             <button className="ga-modal-close" onClick={() => setShowModalAprobar(false)} disabled={saving}>X</button>
                         </div>
+
                         <div className="ga-info-box">
-                            <strong>Aspirante:</strong> {selectedAspirante?.nombres} {selectedAspirante?.apellidos}<br />
-                            <strong>Nota:</strong> {selectedAspirante?.notaExamen} (mínima: 6)
+                            <strong>Aspirante:</strong> {selectedAspirante.nombres} {selectedAspirante.apellidos}<br />
+                            <strong>NIE:</strong> {selectedAspirante.nie || 'Sin NIE'}<br />
+                            <strong>Nota:</strong> {selectedAspirante.notaExamen || 'Sin nota'} {selectedAspirante.exonerado && '(Exonerado)'}<br />
+                            <strong>Especialidad actual:</strong> {getEspecialidadNombre(selectedAspirante.especialidadAspira)}
                         </div>
+
+                        {errorAprobar && (
+                            <div className="ga-error-box">
+                                <strong>Error del servidor:</strong>
+                                <p style={{ margin: '4px 0 0' }}>{errorAprobar}</p>
+                            </div>
+                        )}
+
                         <div className="ga-field" style={{ marginBottom: '14px' }}>
                             <label>Especialidad *</label>
                             <select
@@ -803,6 +882,7 @@ const GestionAspirantesDireccion = () => {
                                 ))}
                             </select>
                         </div>
+
                         <div className="ga-field" style={{ marginBottom: '14px' }}>
                             <label>Clase *</label>
                             <select
@@ -816,14 +896,13 @@ const GestionAspirantesDireccion = () => {
                                         if (formData.especialidadId === '') return true;
                                         const espClase = Number(getClaseEspecialidadId(c));
                                         const espForm = parseInt(formData.especialidadId);
-                                        // Si es Bachillerato General (0), mostrar clases sin especialidad (null/0)
                                         if (espForm === 0) return espClase === 0 || c.idEspecialidad == null;
                                         return espClase === espForm;
                                     })
                                     .map(c => {
                                         const disponible = getClaseDisponible(c);
                                         const sinCupo = disponible <= 0;
-                                        const id = c.idClase ?? c.IdClase ?? c.id ?? '';
+                                        const id = getIdClase(c);
                                         const label = c.nombreClase || c.nombre || `Clase ${id}`;
                                         return (
                                             <option key={id} value={id} disabled={sinCupo}>
@@ -833,13 +912,24 @@ const GestionAspirantesDireccion = () => {
                                     })}
                             </select>
                         </div>
+
+                        {formData.especialidadId && (
+                            <div className="ga-warning-box">
+                                {clases.filter(c => {
+                                    const espClase = Number(getClaseEspecialidadId(c));
+                                    const espForm = parseInt(formData.especialidadId);
+                                    if (espForm === 0) return espClase === 0 || c.idEspecialidad == null;
+                                    return espClase === espForm;
+                                }).length === 0 && (
+                                        <>No hay clases disponibles para esta especialidad. Cambia de especialidad o crea clases primero.</>
+                                    )}
+                            </div>
+                        )}
+
                         <div className="ga-field" style={{ marginBottom: '14px' }}>
                             <label>Sección</label>
                             {formData.idClaseAsignada ? (() => {
-                                const claseSel = clases.find(c => {
-                                    const id = c.idClase ?? c.IdClase ?? c.id;
-                                    return Number(id) === Number(formData.idClaseAsignada);
-                                });
+                                const claseSel = clases.find(c => Number(getIdClase(c)) === Number(formData.idClaseAsignada));
                                 return (
                                     <p style={{ margin: 0, padding: '8px 12px', background: '#f1f5f9', borderRadius: '6px', fontWeight: '600', fontSize: '13px' }}>
                                         Sección {claseSel?.seccion || 'A'} (asignada automáticamente)
@@ -851,19 +941,6 @@ const GestionAspirantesDireccion = () => {
                                 </p>
                             )}
                         </div>
-
-                        {errorAprobar && (
-                            <div style={{ marginTop: '12px', padding: '10px 12px', background: '#fee2e2', color: '#b91c1c', borderRadius: '6px', fontSize: '13px' }}>
-                                <p style={{ margin: 0, fontWeight: '600' }}>{errorAprobar}</p>
-                                <button
-                                    className="ga-btn ga-btn-danger ga-btn-sm"
-                                    style={{ marginTop: '8px' }}
-                                    onClick={() => { setShowModalAprobar(false); setErrorAprobar(''); setShowModalRechazo(true); }}
-                                >
-                                    Rechazar esta solicitud
-                                </button>
-                            </div>
-                        )}
 
                         <div className="ga-modal-actions">
                             <button className="ga-btn ga-btn-secondary" onClick={() => setShowModalAprobar(false)} disabled={saving}>
@@ -882,7 +959,7 @@ const GestionAspirantesDireccion = () => {
             )}
 
             {/* MODAL RECHAZO */}
-            {showModalRechazo && (
+            {showModalRechazo && selectedAspirante && (
                 <div className="ga-modal-overlay" onClick={() => !saving && setShowModalRechazo(false)}>
                     <div className="ga-modal" onClick={e => e.stopPropagation()}>
                         <div className="ga-modal-header">
@@ -890,7 +967,7 @@ const GestionAspirantesDireccion = () => {
                             <button className="ga-modal-close" onClick={() => setShowModalRechazo(false)} disabled={saving}>X</button>
                         </div>
                         <div className="ga-info-box">
-                            <strong>Aspirante:</strong> {selectedAspirante?.nombres} {selectedAspirante?.apellidos}
+                            <strong>Aspirante:</strong> {selectedAspirante.nombres} {selectedAspirante.apellidos}
                         </div>
                         <div className="ga-field">
                             <label>Motivo del Rechazo *</label>
@@ -914,7 +991,7 @@ const GestionAspirantesDireccion = () => {
             )}
 
             {/* MODAL ESPERA */}
-            {showModalEspera && (
+            {showModalEspera && selectedAspirante && (
                 <div className="ga-modal-overlay" onClick={() => !saving && setShowModalEspera(false)}>
                     <div className="ga-modal" onClick={e => e.stopPropagation()}>
                         <div className="ga-modal-header">
@@ -922,7 +999,7 @@ const GestionAspirantesDireccion = () => {
                             <button className="ga-modal-close" onClick={() => setShowModalEspera(false)} disabled={saving}>X</button>
                         </div>
                         <div className="ga-info-box">
-                            <strong>Aspirante:</strong> {selectedAspirante?.nombres} {selectedAspirante?.apellidos}
+                            <strong>Aspirante:</strong> {selectedAspirante.nombres} {selectedAspirante.apellidos}
                         </div>
                         <div className="ga-field">
                             <label>Observación *</label>

@@ -24,7 +24,6 @@ const DashboardLayout = ({ children, title }) => {
             return [
                 { label: 'Dashboard', path: '/dashboard' },
                 { label: 'Gestionar Usuarios', path: '/admin/usuarios' },
-                
                 { label: 'Gestionar Roles', path: '/admin/roles' },
                 { label: 'Configuracion General', path: '/admin/configuracion' },
                 { label: 'Auditoria', path: '/admin/auditoria' },
@@ -39,7 +38,7 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Gestionar Periodos', path: '/admin/periodos' },
                 { label: 'Constancias', path: '/admin/constancias' },
                 { label: 'Título en Proceso', path: '/titulo-en-proceso' },
-                { label: 'Contenido Público', path: '/admin/contenido-publico' }, // ✅ NUEVO
+                { label: 'Contenido Público', path: '/admin/contenido-publico' },
             ];
         }
 
@@ -47,7 +46,6 @@ const DashboardLayout = ({ children, title }) => {
         if (rol === 'Direccion' || rol === 'Director' || codigo === 'DIR001') {
             return [
                 { label: 'Dashboard', path: '/dashboard' },
-                
                 { label: 'Gestionar Aspirantes', path: '/direccion/gestion-aspirantes' },
                 { label: 'Gestionar Estudiantes', path: '/direccion/estudiantes' },
                 { label: 'Gestionar Docentes', path: '/direccion/docentes' },
@@ -70,7 +68,7 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Notificaciones', path: '/admin/notificaciones' },
                 { label: 'Exportar Boletas', path: '/direccion/exportar-boletas' },
                 { label: 'Boleta de Notas', path: '/direccion/boleta-notas' },
-                { label: 'Contenido Público', path: '/direccion/contenido-publico' }, // ✅ NUEVO
+                { label: 'Contenido Público', path: '/direccion/contenido-publico' },
             ];
         }
 
@@ -126,7 +124,6 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Mis Asistencias', path: '/estudiante/asistencias' },
                 { label: 'Mi Horario', path: '/estudiante/horario' },
                 { label: 'Mi Conducta', path: '/estudiante/conducta' },
-                
                 { label: 'Historial Academico', path: '/estudiante/historial' },
                 { label: 'Constancias', path: '/estudiante/constancias' },
                 { label: 'Mi Perfil', path: '/perfil' },
@@ -139,6 +136,7 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Dashboard', path: '/dashboard' },
                 { label: 'Notas de mi Hijo', path: '/encargado/notas' },
                 { label: 'Asistencias', path: '/encargado/asistencias' },
+                { label: 'Conducta', path: '/encargado/conducta' },   // ✅ NUEVO
                 { label: 'Mi Perfil', path: '/perfil' },
             ];
         }
@@ -161,7 +159,7 @@ const DashboardLayout = ({ children, title }) => {
                 { label: 'Constancias', path: '/direccion/constancias' },
                 { label: 'Título en Proceso', path: '/titulo-en-proceso' },
                 { label: 'Boleta de Notas', path: '/direccion/boleta-notas' },
-                { label: 'Contenido Público', path: '/direccion/contenido-publico' }, // ✅ NUEVO
+                { label: 'Contenido Público', path: '/direccion/contenido-publico' },
                 { label: 'Mi Perfil', path: '/perfil' },
             ];
         }

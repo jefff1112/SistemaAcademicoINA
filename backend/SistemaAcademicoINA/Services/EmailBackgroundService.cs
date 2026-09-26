@@ -7,52 +7,64 @@ namespace SistemaAcademicoINA.Services;
 public class EmailBackgroundService : BackgroundService
 {
     private readonly EmailQueue _cola;
-    private readonly IEmailService _emailService;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<EmailBackgroundService> _logger;
 
     public EmailBackgroundService(
         EmailQueue cola,
-        IEmailService emailService,
         IServiceScopeFactory scopeFactory,
         ILogger<EmailBackgroundService> logger)
     {
         _cola = cola;
-        _emailService = emailService;
         _scopeFactory = scopeFactory;
         _logger = logger;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _logger.LogInformation("EmailBackgroundService iniciado y escuchando la cola");
+
         await foreach (var mensaje in _cola.Lector.ReadAllAsync(stoppingToken))
         {
             try
             {
-                await _emailService.EnviarAsync(mensaje);
-                await RegistrarAuditoriaAsync($"Correo enviado a {mensaje.Destinatario}", "EmailEnviado");
+                // Crear scope para resolver IEmailService (Scoped) y AuditoriaHelper (Scoped)
+                using var scope = _scopeFactory.CreateScope();
+                var emailService = scope.ServiceProvider.GetRequiredService<IEmailService>();
+                var auditoria = scope.ServiceProvider.GetRequiredService<AuditoriaHelper>();
+
+                _logger.LogInformation("Procesando correo para {Destinatario}", mensaje.Destinatario);
+
+                await emailService.EnviarAsync(mensaje);
+
+                _logger.LogInformation("Correo enviado exitosamente a {Destinatario}", mensaje.Destinatario);
+
+                await auditoria.RegistrarAsync(
+                    "EmailEnviado",
+                    $"Correo enviado a {mensaje.Destinatario}",
+                    "Sistema");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error al enviar correo a {Destinatario}", mensaje.Destinatario);
-                await RegistrarAuditoriaAsync($"Error al enviar correo a {mensaje.Destinatario}: {ex.Message}", "EmailError");
+
+                // Auditoría del error en un scope separado por si el anterior falló
+                try
+                {
+                    using var scope = _scopeFactory.CreateScope();
+                    var auditoria = scope.ServiceProvider.GetRequiredService<AuditoriaHelper>();
+                    await auditoria.RegistrarAsync(
+                        "EmailError",
+                        $"Error al enviar correo a {mensaje.Destinatario}: {ex.Message}",
+                        "Sistema");
+                }
+                catch (Exception auditEx)
+                {
+                    _logger.LogWarning(auditEx, "No se pudo registrar auditoría del error de correo");
+                }
             }
         }
-    }
 
-    // Registra el resultado del envío en auditoría usando un scope propio
-    // (BackgroundService es singleton, mientras el DbContext es scoped).
-    private async Task RegistrarAuditoriaAsync(string detalle, string accion)
-    {
-        try
-        {
-            using var scope = _scopeFactory.CreateScope();
-            var auditoria = scope.ServiceProvider.GetRequiredService<AuditoriaHelper>();
-            await auditoria.RegistrarAsync(accion, detalle, "Sistema");
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "No se pudo registrar auditoría de envío de correo");
-        }
+        _logger.LogInformation("EmailBackgroundService detenido");
     }
 }

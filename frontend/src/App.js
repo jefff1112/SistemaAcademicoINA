@@ -126,6 +126,7 @@ import BoletaNotasEstudianteEstudiante from './components/Estudiante/BoletaNotas
 import DashboardEncargado from './components/Encargado/DashboardEncargado';
 import NotasEncargado from './components/Encargado/NotasEncargado';
 import AsistenciasEncargado from './components/Encargado/AsistenciasEncargado';
+import MiConductaEncargado from './components/Encargado/MiConductaEncargado'; // ✅ NUEVO
 
 // Perfil
 import MiPerfil from './components/Perfil/MiPerfil';
@@ -164,7 +165,6 @@ function App() {
                     <Route path="/admin/secciones" element={<PrivateRoute><GestionSeccionesAdmin /></PrivateRoute>} />
                     <Route path="/admin/periodos" element={<PrivateRoute><GestionPeriodosAdmin /></PrivateRoute>} />
                     <Route path="/admin/horarios/generar" element={<PrivateRoute><GenerarHorarios /></PrivateRoute>} />
-                    {/* ✅ NUEVO: Contenido público para Admin */}
                     <Route path="/admin/contenido-publico" element={<PrivateRoute><GestionContenidoPublico /></PrivateRoute>} />
 
                     {/* DIRECCION */}
@@ -185,7 +185,6 @@ function App() {
                     <Route path="/direccion/avisos" element={<PrivateRoute><AvisosDireccion /></PrivateRoute>} />
                     <Route path="/direccion/entrevistas" element={<PrivateRoute><GestionEntrevistas /></PrivateRoute>} />
                     <Route path="/direccion/constancias" element={<PrivateRoute><GestionConstanciasDireccion /></PrivateRoute>} />
-                    {/* ✅ NUEVO: Contenido público para Dirección */}
                     <Route path="/direccion/contenido-publico" element={<PrivateRoute><GestionContenidoPublico /></PrivateRoute>} />
 
                     <Route path="/direccion/actividades" element={<PrivateRoute><ActividadesConsultaDireccion /></PrivateRoute>} />
@@ -261,6 +260,7 @@ function App() {
                     <Route path="/encargado/dashboard" element={<PrivateRoute><DashboardEncargado /></PrivateRoute>} />
                     <Route path="/encargado/notas" element={<PrivateRoute><NotasEncargado /></PrivateRoute>} />
                     <Route path="/encargado/asistencias" element={<PrivateRoute><AsistenciasEncargado /></PrivateRoute>} />
+                    <Route path="/encargado/conducta" element={<PrivateRoute><MiConductaEncargado /></PrivateRoute>} /> {/* ✅ NUEVO */}
 
                     {/* PERFIL */}
                     <Route path="/perfil" element={<PrivateRoute><MiPerfil /></PrivateRoute>} />

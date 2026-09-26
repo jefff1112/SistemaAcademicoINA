@@ -24,7 +24,13 @@ const NuevoIngreso = () => {
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const [intentosHoy, setIntentosHoy] = useState(null);
-    const MAX_INTENTOS_POR_DIA = 3;
+
+    // ============================================================
+    // RATE LIMIT POR MINUTO (para demos)
+    // Máximo 5 envíos por minuto por NIE.
+    // El backend también aplica este límite por IP+NIE.
+    // ============================================================
+    const MAX_INTENTOS_POR_MINUTO = 5;
     const EDAD_MINIMA = 14;
     const EDAD_MAXIMA = 19;
 
@@ -39,33 +45,20 @@ const NuevoIngreso = () => {
         'Otro'
     ];
 
-    // ✅ FUNCIÓN CORREGIDA - Calcula la edad exacta con debug
     const calcularEdad = (fechaNacimiento) => {
-        if (!fechaNacimiento) {
-            console.log('❌ fechaNacimiento está vacío');
-            return null;
-        }
+        if (!fechaNacimiento) return null;
 
-        console.log('📅 Fecha recibida (raw):', fechaNacimiento);
-
-        // Si la fecha viene en formato DD/MM/YYYY, convertir a YYYY-MM-DD
         let fechaParseada = fechaNacimiento;
         if (fechaNacimiento.includes('/')) {
             const partes = fechaNacimiento.split('/');
             if (partes.length === 3) {
                 fechaParseada = `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
-                console.log('🔄 Fecha convertida de DD/MM/YYYY a YYYY-MM-DD:', fechaParseada);
             }
         }
 
         const hoy = new Date();
-        console.log('📅 Fecha actual:', hoy.toISOString().split('T')[0]);
-
         const [year, month, day] = fechaParseada.split('-').map(Number);
-        console.log('📅 Año:', year, 'Mes:', month, 'Día:', day);
-
         const nacimiento = new Date(year, month - 1, day);
-        console.log('📅 Fecha de nacimiento (Date object):', nacimiento);
 
         let edad = hoy.getFullYear() - nacimiento.getFullYear();
         const mesActual = hoy.getMonth();
@@ -73,14 +66,10 @@ const NuevoIngreso = () => {
         const mesNac = nacimiento.getMonth();
         const diaNac = nacimiento.getDate();
 
-        console.log('📊 Comparación:', { mesActual, diaActual, mesNac, diaNac });
-
         if (mesActual < mesNac || (mesActual === mesNac && diaActual < diaNac)) {
             edad--;
-            console.log('⬇️ Restando 1 año por no haber cumplido años aún');
         }
 
-        console.log('✅ Edad calculada FINAL:', edad);
         return edad;
     };
 
@@ -91,33 +80,23 @@ const NuevoIngreso = () => {
         return `${anio}-${mes}-${dia}`;
     };
 
-    // ✅ FECHA MÍNIMA (más antigua): hoy - EDAD_MAXIMA años (hace 19 años)
     const fechaLimiteInferior = () => {
         const hoy = new Date();
         hoy.setFullYear(hoy.getFullYear() - EDAD_MAXIMA);
-        const fecha = formatDate(hoy);
-        console.log('📅 Fecha mínima permitida (19 años atrás):', fecha);
-        return fecha;
+        return formatDate(hoy);
     };
 
-    // ✅ FECHA MÁXIMA (más reciente): hoy - EDAD_MINIMA años (hace 14 años)
     const fechaLimiteSuperior = () => {
         const hoy = new Date();
         hoy.setFullYear(hoy.getFullYear() - EDAD_MINIMA);
-        const fecha = formatDate(hoy);
-        console.log('📅 Fecha máxima permitida (14 años atrás):', fecha);
-        return fecha;
+        return formatDate(hoy);
     };
 
-    // ✅ NUEVA FUNCIÓN: Validar fecha antes de enviar
     const validarFechaNacimiento = (fecha) => {
-        console.log('🔍 Validando fecha:', fecha);
-
         if (!fecha) {
             return { valida: false, mensaje: 'La fecha de nacimiento es requerida' };
         }
 
-        // Intentar parsear la fecha
         let fechaParseada = fecha;
         if (fecha.includes('/')) {
             const partes = fecha.split('/');
@@ -127,9 +106,8 @@ const NuevoIngreso = () => {
         }
 
         const edad = calcularEdad(fechaParseada);
-        console.log('🔍 Edad calculada en validación:', edad);
 
-        if (edad === null) {
+        if (edad === null || isNaN(edad)) {
             return { valida: false, mensaje: 'Fecha de nacimiento inválida' };
         }
 
@@ -150,35 +128,37 @@ const NuevoIngreso = () => {
         return { valida: true, mensaje: 'Edad válida', edad };
     };
 
-    const esMayorDeEdad = (fechaNac) => {
-        const edad = calcularEdad(fechaNac);
-        return edad === null ? null : edad >= 18;
-    };
-
-    const getTodayKey = (nie) => {
+    // ============================================================
+    // RATE LIMIT POR MINUTO
+    // ============================================================
+    const getAttemptsKey = (nie) => {
         if (!nie) return null;
-        const today = new Date().toISOString().split('T')[0];
-        return `preinsc_attempts_${nie}_${today}`;
+        return `preinsc_attempts_${nie}`;
     };
 
-    const getAttemptsForToday = (nie) => {
+    const getAttemptsLastMinute = (nie) => {
         try {
-            const key = getTodayKey(nie);
-            if (!key) return 0;
-            const v = localStorage.getItem(key);
-            return v ? parseInt(v, 10) : 0;
+            const key = getAttemptsKey(nie);
+            if (!key) return [];
+            const raw = localStorage.getItem(key);
+            if (!raw) return [];
+            const arr = JSON.parse(raw);
+            if (!Array.isArray(arr)) return [];
+            const hace1min = Date.now() - 60 * 1000;
+            return arr.filter(t => typeof t === 'number' && t > hace1min);
         } catch (err) {
-            return 0;
+            return [];
         }
     };
 
-    const incrementAttemptsForToday = (nie) => {
+    const incrementAttempts = (nie) => {
         try {
-            const key = getTodayKey(nie);
+            const key = getAttemptsKey(nie);
             if (!key) return;
-            const current = getAttemptsForToday(nie);
-            localStorage.setItem(key, String(current + 1));
-            setIntentosHoy(current + 1);
+            const arr = getAttemptsLastMinute(nie);
+            arr.push(Date.now());
+            localStorage.setItem(key, JSON.stringify(arr));
+            setIntentosHoy(arr.length);
         } catch (err) {
             // ignore
         }
@@ -190,24 +170,19 @@ const NuevoIngreso = () => {
             setIntentosHoy(null);
             return;
         }
-        setIntentosHoy(getAttemptsForToday(nieVal));
+        setIntentosHoy(getAttemptsLastMinute(nieVal).length);
     }, [formData.nie]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
-        console.log('🔄 Cambio en campo:', name, 'Valor:', value);
 
         if (name === 'fechaNacimiento') {
-            // Validar la fecha al cambiar
             const validacion = validarFechaNacimiento(value);
-            console.log('🔍 Validación en tiempo real:', validacion);
-
             if (!validacion.valida) {
                 setError(validacion.mensaje);
             } else {
                 setError('');
             }
-
             setFormData({ ...formData, fechaNacimiento: value });
             return;
         }
@@ -277,107 +252,111 @@ const NuevoIngreso = () => {
             return;
         }
 
-        const attempts = getAttemptsForToday(nieVal);
-        if (attempts >= MAX_INTENTOS_POR_DIA) {
-            setError('Has alcanzado el número máximo de intentos de preinscripción para hoy (3). Intenta mañana.');
+        // Rate limit por minuto (solo en frontend para feedback rápido)
+        const attemptsLastMinute = getAttemptsLastMinute(nieVal);
+        if (attemptsLastMinute.length >= MAX_INTENTOS_POR_MINUTO) {
+            setError(`Has alcanzado el límite de ${MAX_INTENTOS_POR_MINUTO} envíos por minuto. Espera unos segundos e intenta de nuevo.`);
             setLoading(false);
             return;
         }
 
-        // ✅ VALIDACIÓN DE FECHA ANTES DE ENVIAR
-        console.log('🔍 Validando fecha antes de enviar:', formData.fechaNacimiento);
+        // Validación de fecha
         const validacionFecha = validarFechaNacimiento(formData.fechaNacimiento);
-        console.log('🔍 Resultado de validación:', validacionFecha);
-
         if (!validacionFecha.valida) {
             setError(validacionFecha.mensaje);
             setLoading(false);
             return;
         }
 
-        // ✅ VERIFICAR DUPLICADOS (con try/catch para ver errores)
-        console.log('🔍 Verificando duplicados...');
-        let duplicadoNie = false, duplicadoDui = false, duplicadoCorreo = false, duplicadoEmailEncargado = false;
+        // Validaciones básicas
+        if (!formData.nombres.trim()) {
+            setError('Los nombres son requeridos');
+            setLoading(false);
+            return;
+        }
+        if (!formData.apellidos.trim()) {
+            setError('Los apellidos son requeridos');
+            setLoading(false);
+            return;
+        }
+
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!formData.correo.trim() || !emailRegex.test(formData.correo.trim())) {
+            setError('Correo electrónico inválido');
+            setLoading(false);
+            return;
+        }
+
+        if (!formData.emailEncargado.trim() || !emailRegex.test(formData.emailEncargado.trim())) {
+            setError('Correo del encargado inválido');
+            setLoading(false);
+            return;
+        }
+
+        if (formData.nivelAspira === 'Bachillerato Tecnico' && !String(formData.especialidadAspira || '').trim()) {
+            setError('Debe seleccionar una especialidad para Bachillerato Técnico');
+            setLoading(false);
+            return;
+        }
+
+        if (!foto) {
+            setError('La fotografía tamaño carnet es requerida');
+            setLoading(false);
+            return;
+        }
+
+        const sinArchivo = documentos.find(d => !d.archivo);
+        if (sinArchivo) {
+            setError(`Debe adjuntar el archivo del documento: ${sinArchivo.tipo}`);
+            setLoading(false);
+            return;
+        }
+
+        // Verificar duplicados (NIE, DUI, Carnet, Correo, Correo encargado)
+        let duplicadoNie = false, duplicadoDui = false, duplicadoCorreo = false,
+            duplicadoEmailEncargado = false, duplicadoCarnet = false;
         try {
             duplicadoNie = await verificarCampo('nie', nieVal);
             duplicadoDui = formData.dui ? await verificarCampo('dui', formData.dui) : false;
             duplicadoCorreo = formData.correo ? await verificarCampo('correo', formData.correo) : false;
             duplicadoEmailEncargado = formData.emailEncargado ? await verificarCampo('emailEncargado', formData.emailEncargado) : false;
-            console.log('🔍 Resultado duplicados:', { duplicadoNie, duplicadoDui, duplicadoCorreo, duplicadoEmailEncargado });
+            duplicadoCarnet = formData.carnetMenoridad ? await verificarCampo('carnetMenoridad', formData.carnetMenoridad) : false;
         } catch (err) {
-            console.error('❌ Error en verificación de duplicados:', err);
-            setError('Error al verificar datos duplicados: ' + (err.message || err));
-            setLoading(false);
-            return;
+            console.warn('⚠️ Error verificando duplicados, continuando:', err);
         }
 
-        if (duplicadoNie || duplicadoDui || duplicadoCorreo || duplicadoEmailEncargado) {
+        if (duplicadoNie || duplicadoDui || duplicadoCorreo || duplicadoEmailEncargado || duplicadoCarnet) {
             setLoading(false);
             return;
         }
 
         try {
-            // Validar campos requeridos
-            if (!formData.nombres.trim()) {
-                setError('Los nombres son requeridos');
-                setLoading(false);
-                return;
-            }
-            if (!formData.apellidos.trim()) {
-                setError('Los apellidos son requeridos');
-                setLoading(false);
-                return;
-            }
-
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!formData.correo.trim() || !emailRegex.test(formData.correo.trim())) {
-                setError('Correo electrónico inválido');
-                setLoading(false);
-                return;
-            }
-
-            if (formData.nivelAspira === 'Bachillerato Tecnico' && !String(formData.especialidadAspira || '').trim()) {
-                setError('Debe seleccionar una especialidad para Bachillerato Técnico');
-                setLoading(false);
-                return;
-            }
-
-            if (!foto) {
-                setError('La fotografía tamaño carnet es requerida');
-                setLoading(false);
-                return;
-            }
-
-            const sinArchivo = documentos.find(d => !d.archivo);
-            if (sinArchivo) {
-                setError(`Debe adjuntar el archivo del documento: ${sinArchivo.tipo}`);
-                setLoading(false);
-                return;
-            }
-
-            console.log('✅ Todas las validaciones pasaron, preparando FormData...');
-
             const data = new FormData();
-            data.append('nombres', formData.nombres);
-            data.append('apellidos', formData.apellidos);
-            data.append('dui', formData.dui || '');
-            data.append('carnetMenoridad', formData.carnetMenoridad || '');
-            data.append('nie', formData.nie);
-            // ✅ Enviar la fecha en formato YYYY-MM-DD
+            data.append('nombres', formData.nombres.trim());
+            data.append('apellidos', formData.apellidos.trim());
+            if (formData.dui && formData.dui.trim()) data.append('dui', formData.dui.trim());
+            if (formData.carnetMenoridad && formData.carnetMenoridad.trim()) data.append('carnetMenoridad', formData.carnetMenoridad.trim());
+            data.append('nie', nieVal);
+
             let fechaEnvio = formData.fechaNacimiento;
             if (fechaEnvio.includes('/')) {
                 const partes = fechaEnvio.split('/');
                 fechaEnvio = `${partes[2]}-${partes[1].padStart(2, '0')}-${partes[0].padStart(2, '0')}`;
             }
-            console.log('📅 Fecha enviada al backend:', fechaEnvio);
             data.append('fechaNacimiento', fechaEnvio);
-            data.append('genero', formData.genero || '');
-            data.append('telefono', formData.telefono || '');
-            data.append('correo', formData.correo);
-            data.append('emailEncargado', formData.emailEncargado);
-            data.append('escuelaProcedencia', formData.escuelaProcedencia || '');
+
+            if (formData.genero) data.append('genero', formData.genero);
+            if (formData.telefono && formData.telefono.trim()) data.append('telefono', formData.telefono.trim());
+            data.append('correo', formData.correo.trim());
+            data.append('emailEncargado', formData.emailEncargado.trim());
+            if (formData.escuelaProcedencia && formData.escuelaProcedencia.trim()) {
+                data.append('escuelaProcedencia', formData.escuelaProcedencia.trim());
+            }
             data.append('nivelAspira', formData.nivelAspira);
-            data.append('especialidadAspira', formData.especialidadAspira || '');
+
+            if (formData.especialidadAspira && String(formData.especialidadAspira).trim()) {
+                data.append('especialidadAspira', String(formData.especialidadAspira).trim());
+            }
 
             data.append('foto', foto);
 
@@ -394,10 +373,10 @@ const NuevoIngreso = () => {
             data.append('documentosInfo', JSON.stringify(docsInfo));
 
             console.log('📤 Enviando al backend...');
-            await createAspirante(data);
+            const response = await createAspirante(data);
+            console.log('✅ Preinscripción exitosa!', response);
 
-            console.log('✅ Preinscripción exitosa!');
-            incrementAttemptsForToday(nieVal);
+            incrementAttempts(nieVal);
             setSuccess(true);
 
             setFormData({
@@ -412,11 +391,29 @@ const NuevoIngreso = () => {
 
         } catch (err) {
             console.error('❌ Error al enviar preinscripción:', err);
-            incrementAttemptsForToday(nieVal);
+            console.error('❌ Response:', err?.response);
+            console.error('❌ Status:', err?.response?.status);
+            console.error('❌ Data:', err?.response?.data);
 
-            const mensaje = err?.response?.data?.mensaje || err?.message || 'Error al enviar la preinscripción';
-            console.log('❌ Mensaje de error:', mensaje);
-            console.log('❌ Error completo:', err);
+            incrementAttempts(nieVal);
+
+            let mensaje = 'Error al enviar la preinscripción';
+            if (err?.response?.data?.mensaje) {
+                mensaje = err.response.data.mensaje;
+            } else if (err?.response?.status === 409) {
+                mensaje = 'Ya existe una preinscripción con estos datos. Verifica el correo, DUI, NIE, carnet o correo del encargado.';
+            } else if (err?.response?.status === 400) {
+                mensaje = err.response.data?.mensaje || 'Datos inválidos. Verifica el formulario.';
+            } else if (err?.response?.status === 401) {
+                mensaje = 'Error de autenticación. Contacta al administrador.';
+            } else if (err?.response?.status === 429) {
+                mensaje = err.response.data?.mensaje || 'Demasiadas solicitudes. Espera unos segundos e intenta de nuevo.';
+            } else if (err?.response?.status === 500) {
+                mensaje = 'Error en el servidor. Intenta de nuevo más tarde.';
+            } else if (err?.message) {
+                mensaje = err.message;
+            }
+
             setError(mensaje);
         }
         setLoading(false);
@@ -443,9 +440,11 @@ const NuevoIngreso = () => {
                 {success && <div className="success-message">Preinscripción registrada exitosamente. En breve nos comunicaremos contigo.</div>}
                 {error && <div className="error-message">{error}</div>}
                 {formData.nie && String(formData.nie).trim() ? (
-                    <div className="info-message">Intentos hoy: {intentosHoy ?? 0}/{MAX_INTENTOS_POR_DIA}</div>
+                    <div className="info-message">
+                        Envíos en el último minuto: {intentosHoy ?? 0}/{MAX_INTENTOS_POR_MINUTO}
+                    </div>
                 ) : (
-                    <div className="info-message">Ingrese NIE para ver los intentos disponibles hoy</div>
+                    <div className="info-message">Ingrese NIE para ver el estado del rate limit</div>
                 )}
 
                 <form onSubmit={handleSubmit}>
@@ -524,12 +523,16 @@ const NuevoIngreso = () => {
                         {formData.nivelAspira === 'Bachillerato Tecnico' && (
                             <div className="form-field">
                                 <label>Especialidad *</label>
-                                <select name="especialidadAspira" value={formData.especialidadAspira} onChange={handleChange} required>
+                                <select
+                                    name="especialidadAspira"
+                                    value={formData.especialidadAspira}
+                                    onChange={handleChange}
+                                    required
+                                >
                                     <option value="">Seleccionar Especialidad</option>
-                                    <option value="1">Administrativo Contable</option>
-                                    <option value="2">Desarrollo de Software</option>
-                                    <option value="3">Salud y Bienestar</option>
-                                    <option value="4">Electrónica</option>
+                                    <option value="1">Tecnico Vocacional en Desarrollo de Software</option>
+                                    <option value="2">Tecnico Vocacional en Administrativo Contable</option>
+                                    <option value="3">Tecnico Productivo en Salud y Bienestar</option>
                                 </select>
                             </div>
                         )}

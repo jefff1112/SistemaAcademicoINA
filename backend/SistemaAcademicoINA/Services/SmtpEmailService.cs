@@ -1,5 +1,6 @@
 // Implementación SMTP del servicio de correo usando MailKit.
 // Lee la configuración de la sección "Smtp" de appsettings.json.
+// Soporta autenticación con contraseña de aplicación de Gmail (recomendado).
 using MailKit.Net.Smtp;
 using MailKit.Security;
 using MimeKit;
@@ -31,10 +32,35 @@ public class SmtpEmailService : IEmailService
         var fromName = smtp["FromName"] ?? "INA - Sistema Académico";
         var enableSsl = bool.Parse(smtp["EnableSsl"] ?? "true");
 
+        if (string.IsNullOrWhiteSpace(user) || string.IsNullOrWhiteSpace(password))
+        {
+            throw new InvalidOperationException(
+                "La configuración SMTP no está completa. Verifica 'Smtp:User' y 'Smtp:Password' en appsettings.json");
+        }
+
         using var client = new SmtpClient();
 
-        // Conexión con STARTTLS (puerto 587) o sin cifrado según configuración.
-        await client.ConnectAsync(host, port, enableSsl ? SecureSocketOptions.StartTls : SecureSocketOptions.None);
+        // Detectar el tipo de conexión segura según el puerto.
+        // - Puerto 587: STARTTLS (recomendado por Gmail)
+        // - Puerto 465: SSL/TLS directo
+        // - Cualquier otro: sin cifrado
+        SecureSocketOptions secureOption;
+        if (port == 465)
+        {
+            secureOption = SecureSocketOptions.SslOnConnect;
+        }
+        else if (port == 587 || enableSsl)
+        {
+            secureOption = SecureSocketOptions.StartTls;
+        }
+        else
+        {
+            secureOption = SecureSocketOptions.None;
+        }
+
+        _logger.LogInformation("Conectando a SMTP {Host}:{Port} con {SecureOption}", host, port, secureOption);
+
+        await client.ConnectAsync(host, port, secureOption);
 
         if (!string.IsNullOrEmpty(user))
         {

@@ -1,75 +1,67 @@
-// src/services/api.js
-// Servicio de API: configura la instancia de Axios con la URL base del backend y los interceptores de token y errores.
 import axios from 'axios';
 
-// Instancia Axios con la URL base del backend.
-// No forzamos Content-Type globalmente para permitir que Axios
-// determine correctamente el encabezado (p.ej. multipart/form-data con boundary).
-// En producción se usa REACT_APP_API_URL, en desarrollo fallback a localhost.
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5228/api';
+// ============================================================
+// URL base del backend .NET
+// En desarrollo: http://localhost:5080/api
+// En producción se puede sobreescribir con REACT_APP_API_URL
+// ============================================================
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5080/api';
 
+// ============================================================
+// Instancia de axios
+// NO definir 'Content-Type' en el default.
+// Axios detecta automáticamente:
+//   - Objeto JS  → application/json
+//   - FormData   → multipart/form-data (con boundary correcto)
+// ============================================================
 const API = axios.create({
-fixes/respaldos-constancias-encargados
-    baseURL: 'http://127.0.0.1:5228/api'
-=======
     baseURL: API_URL
- main
 });
 
-// Interceptor para agregar el token
+// ============================================================
+// Endpoints públicos que NUNCA deben redirigir al login en 401
+// ============================================================
+const ENDPOINTS_PUBLICOS = [
+    '/aspirantes/verificar',
+    '/aspirantes'
+];
+
+const esEndpointPublico = (url = '') =>
+    ENDPOINTS_PUBLICOS.some(p => url.includes(p));
+
+// ============================================================
+// Interceptor de solicitudes: agrega el token JWT si existe
+// ============================================================
 API.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('token');
-
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
-        // Log de la URL completa con parámetros
-        if (config.params) {
-            const url = new URL(config.url, config.baseURL);
-            Object.entries(config.params).forEach(([key, value]) => {
-                url.searchParams.append(key, value);
-            });
-            console.log('📤 API Request:', config.method?.toUpperCase(), url.toString());
-        } else {
-            console.log('📤 API Request:', config.method?.toUpperCase(), config.baseURL + config.url);
-        }
         return config;
     },
-    (error) => {
-        return Promise.reject(error);
-    }
+    (error) => Promise.reject(error)
 );
 
-// Interceptor para manejar errores
+// ============================================================
+// Interceptor de respuestas
+// - 401 en endpoint público → NO redirige, solo propaga el error
+// - 401 en endpoint protegido → limpia sesión y redirige al login
+// ============================================================
 API.interceptors.response.use(
-    (response) => {
-        return response;
-    },
+    (response) => response,
     (error) => {
-        // Solo redirigir si es 401 y NO es una petición que debe manejar el error
-        if (error.response?.status === 401) {
-            const url = error.config?.url || '';
+        const status = error.response?.status;
+        const url = error.config?.url || '';
 
-            // ✅ EXCLUIR estas URLs del cierre de sesión
-            const urlsExcluidas = [
-                '/boleta/',
-                '/notasdocente/mis-materias',
-                '/resultados-periodos/',
-                '/notas/'
-            ];
-
-            const debeExcluir = urlsExcluidas.some(u => url.includes(u));
-
-            if (debeExcluir) {
-                return Promise.reject(error);
-            }
-
-            // Si no está en la lista de excluidas, cerrar sesión
+        if (status === 401 && !esEndpointPublico(url)) {
             localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            window.location.href = '/login';
+            localStorage.removeItem('usuario');
+            if (window.location.pathname !== '/login') {
+                window.location.href = '/login';
+            }
         }
+
         return Promise.reject(error);
     }
 );
